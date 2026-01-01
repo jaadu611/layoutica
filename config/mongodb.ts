@@ -3,8 +3,7 @@ import mongoose from "mongoose";
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
-  console.error("MONGODB_URI is not defined in environment variables");
-  process.exit(1);
+  throw new Error("MONGODB_URI is not defined in environment variables");
 }
 
 const connectDB = async (retries = 5, delayMs = 3000) => {
@@ -12,8 +11,7 @@ const connectDB = async (retries = 5, delayMs = 3000) => {
     mongoose.set("strictQuery", true);
 
     await mongoose.connect(MONGODB_URI, {
-      autoIndex: false,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
     });
 
     mongoose.connection.on("error", (err) => {
@@ -25,7 +23,7 @@ const connectDB = async (retries = 5, delayMs = 3000) => {
     });
   } catch (error) {
     console.error(
-      `MongoDB connection failed (${retries} retries left):`,
+      `MongoDB connection failed (${retries - 1} retries remaining):`,
       error
     );
 
@@ -45,7 +43,7 @@ const gracefulShutdown = async (signal: string) => {
   process.exit(0);
 };
 
-process.on("SIGINT", gracefulShutdown);
-process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 export default connectDB;
