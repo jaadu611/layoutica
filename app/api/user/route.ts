@@ -20,7 +20,7 @@ export async function POST() {
       );
     }
 
-    const dbUser = await User.findOneAndUpdate(
+    const result = await User.findOneAndUpdate(
       { email },
       {
         $setOnInsert: {
@@ -29,10 +29,12 @@ export async function POST() {
           email,
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true, rawResult: true }
     );
 
-    const isNewUser = !dbUser;
+    const dbUser = result.value;
+    const upsertedId = result.lastErrorObject?.upserted;
+    const isNewUser = !!upsertedId;
 
     return NextResponse.json(
       {
