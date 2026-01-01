@@ -1,13 +1,14 @@
 "use client";
 
 import { UserDetailContext } from "@/context/UserDetailContext";
+import { UserDetails } from "@/types/User";
 import { useUser } from "@clerk/nextjs";
 import axios from "axios";
 import { useEffect, useState } from "react";
 
 const Provider = ({ children }: { children: React.ReactNode }) => {
   const { isSignedIn, isLoaded } = useUser();
-  const [userDetails, setUserDetails] = useState();
+  const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -29,7 +30,7 @@ const Provider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <>
-      <UserDetailContext.Provider value={{ userDetails, setUserDetails }}>
+      <UserDetailContext.Provider value={userDetails}>
         {children}
       </UserDetailContext.Provider>
     </>

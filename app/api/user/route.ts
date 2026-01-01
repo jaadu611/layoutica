@@ -20,23 +20,26 @@ export async function POST() {
       );
     }
 
-    const dbUser = await User.findOne({ email });
+    const dbUser = await User.findOneAndUpdate(
+      { email },
+      {
+        $setOnInsert: {
+          name: user.username ?? email?.split("@")[0],
+          username: user.username ?? email?.split("@")[0],
+          email,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
-    if (dbUser)
-      return NextResponse.json(
-        { message: "User already exists", user: dbUser },
-        { status: 200 }
-      );
-
-    const newUser = await User.create({
-      name: user.username ?? email?.split("@")[0],
-      username: user.username ?? email?.split("@")[0],
-      email,
-    });
+    const isNewUser = !dbUser;
 
     return NextResponse.json(
-      { message: "User created", user: newUser },
-      { status: 201 }
+      {
+        message: isNewUser ? "User created" : "User already exists",
+        user: dbUser,
+      },
+      { status: isNewUser ? 201 : 200 }
     );
   } catch (err) {
     console.error("Error syncing user:", err);
