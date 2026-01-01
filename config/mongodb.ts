@@ -37,13 +37,4 @@ const connectDB = async (retries = 5, delayMs = 3000) => {
   }
 };
 
-const gracefulShutdown = async (signal: string) => {
-  console.log(`${signal} received. Closing MongoDB connection...`);
-  await mongoose.connection.close();
-  process.exit(0);
-};
-
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-
 export default connectDB;
