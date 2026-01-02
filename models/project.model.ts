@@ -6,6 +6,7 @@ const projectSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      maxlength: [5000, "User input cannot exceed 5000 characters"],
     },
     type: {
       type: String,
@@ -13,7 +14,7 @@ const projectSchema = new mongoose.Schema(
       required: true,
     },
     config: {
-      type: Object,
+      type: mongoose.Schema.Types.Mixed,
       default: {},
     },
     creator: {

@@ -28,7 +28,8 @@ function InputArea() {
   const user = useUser();
 
   const onCreateProject = async () => {
-    if (!user) return router.push("/sign-in");
+    if (!user.isLoaded) return;
+    if (!user.isSignedIn) return router.push("/sign-in");
 
     setLoading(true);
 

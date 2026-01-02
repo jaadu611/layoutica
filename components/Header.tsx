@@ -21,7 +21,10 @@ const Header = async () => {
       </Link>
       <ul className="flex max-sm:hidden gap-5 items-center font-medium text-lg">
         {headerOptions.map((item) => (
-          <li key={item} className="hover:text-blue-500 cursor-pointer">
+          <li
+            key={item}
+            className="hover:text-blue-500 cursor-pointer transition-all duration-200"
+          >
             {item}
           </li>
         ))}

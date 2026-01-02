@@ -25,6 +25,13 @@ export async function POST(req: NextRequest) {
 
     const dbUser = await User.findOne({ clerkId: user.id });
 
+    if (!dbUser) {
+      return NextResponse.json(
+        { message: "User not found in database" },
+        { status: 404 }
+      );
+    }
+
     const project = await Project.create({
       userInput,
       type,
@@ -33,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, project }, { status: 201 });
   } catch (error) {
-    console.error("POST /api/layout error:", error);
+    console.error("POST /api/project error:", error);
 
     return NextResponse.json(
       { message: "Internal server error" },
