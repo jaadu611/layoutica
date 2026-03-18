@@ -8,61 +8,89 @@ export type ElementType =
   | "footer";
 
 export interface StyleProps {
+  display?: "block" | "flex" | "grid" | "none" | "inline-block";
+  flexDirection?: "row" | "column" | "row-reverse" | "column-reverse";
+  justifyContent?:
+    | "flex-start"
+    | "center"
+    | "flex-end"
+    | "space-between"
+    | "space-around"
+    | "space-evenly";
+  alignItems?: "flex-start" | "center" | "flex-end" | "stretch" | "baseline";
+  flexWrap?: "wrap" | "nowrap" | "wrap-reverse";
+  gap?: string;
+  flexGrow?: number;
+  flexShrink?: number;
+  gridTemplateColumns?: string;
+  zIndex?: number;
+  position?: "static" | "relative" | "absolute" | "fixed" | "sticky";
+  top?: string;
+  left?: string;
+  right?: string;
+  bottom?: string;
+
   width?: string;
   height?: string;
   minWidth?: string;
   minHeight?: string;
   maxWidth?: string;
   maxHeight?: string;
-  margin?: string;
-  marginTop?: string;
-  marginBottom?: string;
-  marginLeft?: string;
-  marginRight?: string;
   padding?: string;
   paddingTop?: string;
   paddingBottom?: string;
   paddingLeft?: string;
   paddingRight?: string;
-  display?: "block" | "flex" | "grid" | "none" | "inline-block";
-  flexDirection?: "row" | "column";
-  justifyContent?:
-    | "flex-start"
-    | "center"
-    | "flex-end"
-    | "space-between"
-    | "space-around";
-  alignItems?: "flex-start" | "center" | "flex-end" | "stretch";
-  gap?: string;
-  flexWrap?: "wrap" | "nowrap";
+  margin?: string;
+  marginTop?: string;
+  marginBottom?: string;
+  marginLeft?: string;
+  marginRight?: string;
+  aspectRatio?: string;
+
   color?: string;
   fontSize?: string;
   fontWeight?: string;
+  fontFamily?: string;
   lineHeight?: string;
   letterSpacing?: string;
   textAlign?: "left" | "center" | "right" | "justify";
   textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
+  textDecoration?: "none" | "underline" | "line-through";
+  fontStyle?: "normal" | "italic";
+  whiteSpace?: "normal" | "nowrap" | "pre" | "pre-wrap" | "pre-line";
+
   backgroundColor?: string;
   backgroundImage?: string;
-  backgroundSize?: "cover" | "contain" | "auto";
+  backgroundSize?: string;
+  backgroundPosition?: string;
+  backgroundRepeat?: string;
+  opacity?: number;
   borderRadius?: string;
+  boxShadow?: string;
+  backdropFilter?: string;
+
+  borderWidth?: string;
+  borderStyle?: "solid" | "dashed" | "dotted" | "none";
+  borderColor?: string;
   borderTop?: string;
   borderRight?: string;
   borderBottom?: string;
   borderLeft?: string;
-  borderWidth?: string;
-  borderStyle?: "solid" | "dashed" | "dotted" | "none";
-  borderColor?: string;
-  boxShadow?: string;
-  opacity?: number;
+  outline?: string;
+
   cursor?: string;
-  position?: "static" | "relative" | "absolute" | "fixed";
-  top?: string;
-  left?: string;
-  right?: string;
-  bottom?: string;
-  zIndex?: number;
+  transition?: string;
+  transform?: string;
   overflow?: "visible" | "hidden" | "scroll" | "auto";
+  objectFit?: "fill" | "contain" | "cover" | "none" | "scale-down";
+  userSelect?: "auto" | "text" | "none" | "all";
+  pointerEvents?: "auto" | "none";
+
+  gradientType?: "linear" | "radial" | "none";
+  gradientAngle?: number;
+  gradientStartColor?: string;
+  gradientEndColor?: string;
 }
 
 export interface CanvasElement {
@@ -90,15 +118,24 @@ export interface Page {
   elements: CanvasElement[];
 }
 
+export interface HistoryEntry {
+  pages: Page[];
+  activePageId: string;
+}
+
 export interface BuilderState {
   pages: Page[];
   activePageId: string;
   selectedElementId: string | null;
   hoveredElementId: string | null;
+  past: HistoryEntry[];
+  future: HistoryEntry[];
+
   addPage: (name: string) => void;
   deletePage: (id: string) => void;
   setActivePage: (id: string) => void;
   renamePage: (id: string, name: string) => void;
+
   addElement: (
     element: Omit<CanvasElement, "id">,
     parentId?: string,
@@ -114,6 +151,13 @@ export interface BuilderState {
     targetParentId?: string,
     targetIndex?: number,
   ) => void;
+  duplicateElement: (id: string) => void;
+
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+
   getActivePage: () => Page | undefined;
   getSelectedElement: () => CanvasElement | undefined;
 }

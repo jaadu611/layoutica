@@ -195,7 +195,7 @@ export default function Sidebar() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 text-[11px] font-medium capitalize transition-colors relative ${
+            className={`flex-1 text-[11px] cursor-pointer font-medium capitalize transition-colors relative ${
               tab === t ? "text-white" : "text-white/30 hover:text-white/60"
             }`}
           >
@@ -313,14 +313,14 @@ export default function Sidebar() {
               </div>
             ))}
 
-            <div className="mt-4 flex gap-1 px-1">
+            <div className="mt-4 h-6 flex gap-1">
               <input
                 type="text"
                 placeholder="Page name"
                 value={newPageName}
                 onChange={(e) => setNewPageName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddPage()}
-                className="flex-1 text-[11px] bg-white/5 border border-white/10 rounded px-2 py-1.5 outline-none focus:border-white/20 text-white placeholder-white/10"
+                className="flex-1 text-[11px] w-30 cursor-pointer bg-white/5 border border-white/10 rounded px-2 py-1.5 outline-none focus:border-white/20 text-white placeholder-white/10"
               />
               <button
                 onClick={handleAddPage}
