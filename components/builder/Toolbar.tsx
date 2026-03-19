@@ -3,23 +3,36 @@
 import { useState, useEffect } from "react";
 import { useBuilderStore } from "@/lib/builder/store";
 import { generateAllPages } from "@/lib/builder/codeGenerator";
+import { ProjectSaverLoader } from "@/lib/builder/projectSaverLoader";
 import CodeExportModal from "./CodeExportModal";
 import PreviewModal from "./PreviewModal";
-import { Undo2, Redo2, Share, Play, Palette } from "lucide-react";
+import {
+  Undo2,
+  Redo2,
+  Share,
+  Play,
+  Palette,
+  Save,
+  FolderOpen,
+} from "lucide-react";
 import DesignTokensPanel from "./DesignTokensPanel";
 
 export default function Toolbar() {
   const {
     pages,
     components,
+    designTokens,
     activePageId,
     undo,
     redo,
     canUndo,
     canRedo,
     getActivePage,
+    loadProject,
+    setActivePage,
   } = useBuilderStore();
 
+  const [projectName, setProjectName] = useState("untitled-project");
   const [showExport, setShowExport] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showTokens, setShowTokens] = useState(false);
@@ -35,31 +48,43 @@ export default function Toolbar() {
     setShowPreview(true);
   };
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      const meta = e.metaKey || e.ctrlKey;
-      if (!meta) return;
-      if (e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        if (canUndo()) undo();
-      } else if ((e.key === "z" && e.shiftKey) || e.key === "y") {
-        e.preventDefault();
-        if (canRedo()) redo();
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [undo, redo, canUndo, canRedo]);
+  const handleSaveProject = () => {
+    ProjectSaverLoader.save(
+      projectName,
+      pages,
+      components,
+      designTokens,
+      activePageId,
+    );
+  };
 
-  // Get the slug of the currently active page so preview opens on it
+  const handleLoadProject = async () => {
+    try {
+      const project = await ProjectSaverLoader.load();
+
+      loadProject(
+        project.data.pages,
+        project.data.savedComponents,
+        project.data.designTokens,
+      );
+
+      setProjectName(project.metadata.name);
+
+      if (project.data.viewSettings?.activePageId) {
+        setActivePage(project.data.viewSettings.activePageId);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const activePage = getActivePage();
   const initialSlug = activePage?.slug ?? "/";
 
   return (
     <>
       <div className="h-12 border-b border-[#383838] bg-[#2c2c2c] flex items-center justify-between px-4 shrink-0 select-none">
-        {/* Left: Logo + Undo/Redo */}
-        <div className="flex items-center w-1/3">
+        <div className="flex items-center w-2/5">
           <div className="flex items-center gap-3 pr-4 border-r border-[#444] mr-4">
             <div className="w-5 h-5 flex items-center justify-center text-white/90">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -73,9 +98,27 @@ export default function Toolbar() {
                 <path d="M7 0H14V7H7V0Z" fill="#A259FF" />
               </svg>
             </div>
-            <span className="text-[13px] font-medium text-white/90 tracking-wide">
-              layoutica
-            </span>
+            <input
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              className="bg-transparent text-[13px] font-medium text-white/90 tracking-wide focus:outline-none hover:bg-white/5 px-1 rounded transition-colors w-32 truncate"
+              placeholder="Project Name"
+            />
+          </div>
+
+          <div className="flex items-center gap-1 border-r border-[#444] pr-4 mr-4">
+            <button
+              onClick={handleSaveProject}
+              className="flex items-center justify-center w-8 h-8 rounded text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
+            >
+              <Save size={16} />
+            </button>
+            <button
+              onClick={handleLoadProject}
+              className="flex items-center justify-center w-8 h-8 rounded text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
+            >
+              <FolderOpen size={16} />
+            </button>
           </div>
 
           <div className="flex items-center gap-1">
@@ -104,7 +147,6 @@ export default function Toolbar() {
           </div>
         </div>
 
-        {/* Right: Preview + Tokens + Export */}
         <div className="flex items-center justify-end w-1/3 gap-2">
           <button
             onClick={handlePreview}
@@ -115,7 +157,6 @@ export default function Toolbar() {
           </button>
           <button
             onClick={() => setShowTokens((v) => !v)}
-            title="Design Tokens"
             className={`flex items-center justify-center w-8 h-8 rounded transition-colors cursor-pointer ${showTokens ? "bg-white/12 text-white" : "text-white/50 hover:text-white hover:bg-white/8"}`}
           >
             <Palette size={15} />
@@ -133,7 +174,6 @@ export default function Toolbar() {
       {showTokens && (
         <DesignTokensPanel floating onClose={() => setShowTokens(false)} />
       )}
-
       {showPreview && (
         <PreviewModal
           pages={pages}
@@ -142,7 +182,6 @@ export default function Toolbar() {
           onClose={() => setShowPreview(false)}
         />
       )}
-
       {showExport && (
         <CodeExportModal
           files={exportFiles}

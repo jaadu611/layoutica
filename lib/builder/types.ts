@@ -1,3 +1,5 @@
+import { DesignTokens } from "./projectSaverLoader";
+
 export type ElementType =
   // Layout
   | "div"
@@ -184,11 +186,6 @@ export interface CanvasElement {
   styles: StyleProps;
   htmlTag?: string;
   tailwindClasses?: string;
-  /**
-   * Set when this element was inserted from the Saved Components panel.
-   * Stores the SavedComponent.id so the code generator can reliably match
-   * every instance — regardless of cloned ids — back to its component file.
-   */
   savedComponentId?: string;
   metadata?: {
     name?: string;
@@ -219,6 +216,7 @@ export interface SavedComponent {
 export interface BuilderState {
   pages: Page[];
   activePageId: string;
+  designTokens: DesignTokens;
   selectedElementId: string | null;
   hoveredElementId: string | null;
   editingElementId: string | null;
@@ -248,6 +246,12 @@ export interface BuilderState {
     targetIndex?: number,
   ) => void;
   duplicateElement: (id: string) => void;
+
+  loadProject: (
+    pages: Page[],
+    components: SavedComponent[],
+    designTokens: DesignTokens,
+  ) => void;
 
   undo: () => void;
   redo: () => void;

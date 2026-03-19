@@ -705,7 +705,8 @@ function LayerTreeItem({
   const isHovered = hoveredId === el.id;
   const hasChildren = el.children && el.children.length > 0;
 
-  const displayName = el.metadata?.name || el.type.charAt(0).toUpperCase() + el.type.slice(1);
+  const displayName =
+    el.metadata?.name || el.type.charAt(0).toUpperCase() + el.type.slice(1);
 
   return (
     <div>
@@ -723,8 +724,8 @@ function LayerTreeItem({
           isSelected
             ? "bg-blue-500/15 text-blue-400"
             : isHovered
-            ? "bg-white/5 text-white/90"
-            : "text-white/60 hover:text-white/80"
+              ? "bg-white/5 text-white/90"
+              : "text-white/60 hover:text-white/80"
         }`}
         style={{ paddingLeft: `${depth * 10 + 8}px` }}
       >
@@ -746,44 +747,81 @@ function LayerTreeItem({
             <span className="w-1 h-1 rounded-full bg-white/20" />
           )}
         </div>
-        
+
         {/* Detailed icon mapping */}
         <div className="mr-2 opacity-70">
-          {el.type === "div" ? <Square size={11} />
-          : el.type === "section" ? <Layout size={11} />
-          : el.type === "article" ? <FileText size={11} />
-          : el.type === "aside" || el.type === "footer" ? <Rows size={11} />
-          : el.type === "main" ? <Layout size={11} />
-          : el.type === "header" || el.type === "nav" || el.type === "navbar" ? <Navigation size={11} />
-          : el.type === "form" || el.type === "input" ? <FormInput size={11} />
-          : el.type === "heading" ? <Heading1 size={11} />
-          : el.type === "heading2" ? <Heading2 size={11} />
-          : el.type === "heading3" ? <Heading3 size={11} />
-          : el.type === "paragraph" ? <AlignLeft size={11} />
-          : el.type === "text" ? <Type size={11} />
-          : el.type === "span" ? <Bold size={11} />
-          : el.type === "link" ? <Link2 size={11} />
-          : el.type === "list" || el.type === "orderedList" ? <List size={11} />
-          : el.type === "blockquote" ? <Quote size={11} />
-          : el.type === "code" || el.type === "pre" ? <Code2 size={11} />
-          : el.type === "badge" ? <Tag size={11} />
-          : el.type === "image" ? <ImageIcon size={11} />
-          : el.type === "video" ? <Video size={11} />
-          : el.type === "audio" ? <AudioLines size={11} />
-          : el.type === "iframe" ? <MonitorPlay size={11} />
-          : el.type === "icon" ? <Smile size={11} />
-          : el.type === "button" ? <MousePointer2 size={11} />
-          : el.type === "textarea" ? <TextCursorInput size={11} />
-          : el.type === "select" ? <ListFilter size={11} />
-          : el.type === "checkbox" ? <CheckSquare size={11} />
-          : el.type === "radio" ? <CircleDot size={11} />
-          : el.type === "table" ? <Table2 size={11} />
-          : el.type === "divider" ? <Minus size={11} />
-          : el.type === "spacer" ? <Space size={11} />
-          : <Frame size={11} />}
+          {el.type === "div" ? (
+            <Square size={11} />
+          ) : el.type === "section" ? (
+            <Layout size={11} />
+          ) : el.type === "article" ? (
+            <FileText size={11} />
+          ) : el.type === "aside" || el.type === "footer" ? (
+            <Rows size={11} />
+          ) : el.type === "main" ? (
+            <Layout size={11} />
+          ) : el.type === "header" ||
+            el.type === "nav" ||
+            el.type === "navbar" ? (
+            <Navigation size={11} />
+          ) : el.type === "form" || el.type === "input" ? (
+            <FormInput size={11} />
+          ) : el.type === "heading" ? (
+            <Heading1 size={11} />
+          ) : el.type === "heading2" ? (
+            <Heading2 size={11} />
+          ) : el.type === "heading3" ? (
+            <Heading3 size={11} />
+          ) : el.type === "paragraph" ? (
+            <AlignLeft size={11} />
+          ) : el.type === "text" ? (
+            <Type size={11} />
+          ) : el.type === "span" ? (
+            <Bold size={11} />
+          ) : el.type === "link" ? (
+            <Link2 size={11} />
+          ) : el.type === "list" || el.type === "orderedList" ? (
+            <List size={11} />
+          ) : el.type === "blockquote" ? (
+            <Quote size={11} />
+          ) : el.type === "code" || el.type === "pre" ? (
+            <Code2 size={11} />
+          ) : el.type === "badge" ? (
+            <Tag size={11} />
+          ) : el.type === "image" ? (
+            <ImageIcon size={11} />
+          ) : el.type === "video" ? (
+            <Video size={11} />
+          ) : el.type === "audio" ? (
+            <AudioLines size={11} />
+          ) : el.type === "iframe" ? (
+            <MonitorPlay size={11} />
+          ) : el.type === "icon" ? (
+            <Smile size={11} />
+          ) : el.type === "button" ? (
+            <MousePointer2 size={11} />
+          ) : el.type === "textarea" ? (
+            <TextCursorInput size={11} />
+          ) : el.type === "select" ? (
+            <ListFilter size={11} />
+          ) : el.type === "checkbox" ? (
+            <CheckSquare size={11} />
+          ) : el.type === "radio" ? (
+            <CircleDot size={11} />
+          ) : el.type === "table" ? (
+            <Table2 size={11} />
+          ) : el.type === "divider" ? (
+            <Minus size={11} />
+          ) : el.type === "spacer" ? (
+            <Space size={11} />
+          ) : (
+            <Frame size={11} />
+          )}
         </div>
 
-        <span className="text-[11px] font-medium truncate flex-1">{displayName}</span>
+        <span className="text-[11px] font-medium truncate flex-1">
+          {displayName}
+        </span>
       </div>
 
       {hasChildren && expanded && (
@@ -865,7 +903,9 @@ export default function Sidebar() {
           <div className="py-2">
             {!activePage?.elements?.length ? (
               <div className="px-4 py-8 text-center text-white/30 text-[11px]">
-                No layers on this page.<br/>Add elements from Assets.
+                No layers on this page.
+                <br />
+                Add elements from Assets.
               </div>
             ) : (
               activePage.elements.map((el) => (
@@ -942,7 +982,9 @@ export default function Sidebar() {
                 <FileText
                   size={12}
                   className={
-                    page.id === activePageId ? "text-blue-400" : "opacity-40 group-hover:opacity-100"
+                    page.id === activePageId
+                      ? "text-blue-400"
+                      : "opacity-40 group-hover:opacity-100"
                   }
                 />
 

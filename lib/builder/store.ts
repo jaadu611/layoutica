@@ -39,12 +39,6 @@ function deepCloneWithNewIds(el: CanvasElement): CanvasElement {
   };
 }
 
-/**
- * Clone an element for insertion from the components panel.
- * Preserves savedComponentId on the top-level element so the code generator
- * can always match any instance back to its SavedComponent — regardless of
- * how many times it has been inserted or cloned.
- */
 function deepCloneForInsert(
   el: CanvasElement,
   savedComponentId: string,
@@ -177,6 +171,10 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   past: [],
   future: [],
   components: loadComponents(),
+  designTokens: {
+    colors: [],
+    typography: [],
+  },
 
   undo: () => {
     const { past, pages, activePageId, future } = get();
@@ -252,6 +250,20 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       }),
       selectedElementId: newEl.id,
       past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
+      future: [],
+    });
+  },
+
+  loadProject: (pages, components, designTokens) => {
+    set({
+      pages,
+      components,
+      designTokens: designTokens || { colors: [], typography: [] }, // Fallback if missing
+      activePageId: pages[0]?.id || "",
+      selectedElementId: null,
+      hoveredElementId: null,
+      editingElementId: null,
+      past: [],
       future: [],
     });
   },

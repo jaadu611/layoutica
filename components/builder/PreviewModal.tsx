@@ -381,7 +381,6 @@ export default function PreviewModal({
           <X size={13} />
         </button>
 
-        {/* Nav buttons */}
         <div className="flex items-center gap-1">
           <button
             onClick={goBack}
@@ -464,7 +463,6 @@ export default function PreviewModal({
           </span>
         </div>
 
-        {/* Page tabs */}
         <div
           className="flex items-center gap-1 overflow-x-auto"
           style={{ maxWidth: 280, scrollbarWidth: "none" }}
@@ -472,7 +470,11 @@ export default function PreviewModal({
           {pages.map((page) => (
             <button
               key={page.id}
-              onClick={() => navigateTo(page.slug)}
+              onClick={() => {
+                if (currentSlug !== page.slug) {
+                  navigateTo(page.slug);
+                }
+              }}
               className="flex items-center shrink-0 cursor-pointer transition-all"
               style={{
                 padding: "4px 10px",
@@ -489,6 +491,7 @@ export default function PreviewModal({
                     ? "rgba(255,255,255,0.8)"
                     : "rgba(255,255,255,0.3)",
                 whiteSpace: "nowrap",
+                cursor: currentSlug === page.slug ? "default" : "pointer",
               }}
             >
               {page.name}
@@ -496,7 +499,6 @@ export default function PreviewModal({
           ))}
         </div>
 
-        {/* Viewport switcher */}
         <div
           className="flex items-center shrink-0"
           style={{

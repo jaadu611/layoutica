@@ -696,21 +696,6 @@ export default function PropertiesPanel() {
       key === "gradientAngle"
     ) {
       val = value === "" ? undefined : Number(value);
-    } else if (
-      (key === "fontSize" ||
-        key === "letterSpacing" ||
-        key === "width" ||
-        key === "height" ||
-        key === "minWidth" ||
-        key === "maxWidth" ||
-        key === "minHeight" ||
-        key === "maxHeight" ||
-        key === "gap") &&
-      typeof value === "string" &&
-      value !== "" &&
-      !isNaN(Number(value))
-    ) {
-      val = Number(value);
     }
 
     updateElement(el.id, {
@@ -734,15 +719,17 @@ export default function PropertiesPanel() {
     value: any,
     property?: string,
   ) => {
-    const val = value === "" ? undefined : property ? value : Number(value);
+    const val = value === "" ? undefined : value;
     const updates: any = {};
     const suffix = property || "";
     if (type === "padding") {
+      updates.padding = val;
       updates.paddingTop = val;
       updates.paddingRight = val;
       updates.paddingBottom = val;
       updates.paddingLeft = val;
     } else if (type === "margin") {
+      updates.margin = val;
       updates.marginTop = val;
       updates.marginRight = val;
       updates.marginBottom = val;
