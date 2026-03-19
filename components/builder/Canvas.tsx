@@ -1,6 +1,6 @@
 "use client";
 
-import {
+import React, {
   useState,
   useEffect,
   useLayoutEffect,
@@ -10,7 +10,8 @@ import {
 import { useBuilderStore } from "@/lib/builder/store";
 import { ElementType, CanvasElement } from "@/lib/builder/types";
 import { defaultElement } from "./Sidebar";
-import { ArrowUp, ArrowDown, Trash2, Copy, Plus } from "lucide-react";
+import * as LucideIcons from "lucide-react";
+const { ArrowUp, ArrowDown, Trash2, Copy, Plus, Bookmark } = LucideIcons;
 
 interface RenderElementProps {
   el: CanvasElement;
@@ -49,9 +50,17 @@ function ContextMenu({
   elId: string;
   onClose: () => void;
 }) {
-  const { moveElement, deleteElement, duplicateElement } = useBuilderStore();
+  const {
+    moveElement,
+    deleteElement,
+    duplicateElement,
+    saveComponent,
+    getActivePage,
+  } = useBuilderStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
+  const [saving, setSaving] = useState(false);
+  const [saveName, setSaveName] = useState("");
 
   useLayoutEffect(() => {
     if (menuRef.current) {
@@ -75,10 +84,29 @@ function ContextMenu({
     return () => document.removeEventListener("mousedown", handle);
   }, [onClose]);
 
+  const handleSaveComponent = () => {
+    const page = getActivePage();
+    if (!page) return;
+    const findEl = (els: any[]): any => {
+      for (const el of els) {
+        if (el.id === elId) return el;
+        if (el.children) {
+          const f = findEl(el.children);
+          if (f) return f;
+        }
+      }
+    };
+    const el = findEl(page.elements);
+    if (!el) return;
+    const name = saveName.trim() || el.type;
+    saveComponent(name, el);
+    onClose();
+  };
+
   return (
     <div
       ref={menuRef}
-      className="fixed z-10000 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-2xl py-1.5 min-w-[170px]"
+      className="fixed z-10000 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-2xl py-1.5 min-w-[180px]"
       style={{ left: pos.left, top: pos.top }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -116,6 +144,35 @@ function ContextMenu({
         <Copy size={12} className="text-white/30" /> Duplicate
       </button>
       <div className="my-1 border-t border-[#333]" />
+      {saving ? (
+        <div className="px-3 py-2 flex gap-1.5">
+          <input
+            autoFocus
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSaveComponent();
+              if (e.key === "Escape") setSaving(false);
+            }}
+            placeholder="Component name..."
+            className="flex-1 text-[11px] bg-white/5 border border-white/10 rounded px-2 py-1 outline-none focus:border-blue-500/50 text-white placeholder-white/25"
+          />
+          <button
+            onClick={handleSaveComponent}
+            className="text-[11px] bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 transition-colors"
+          >
+            Save
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setSaving(true)}
+          className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+        >
+          <Bookmark size={12} className="text-white/30" /> Save as Component
+        </button>
+      )}
+      <div className="my-1 border-t border-[#333]" />
       <button
         onClick={() => {
           deleteElement(elId);
@@ -148,6 +205,8 @@ function RenderElement({
     selectElement,
     setHoveredElement,
     updateElement,
+    pages,
+    setActivePage,
   } = useBuilderStore();
 
   const isResizing = useRef(false);
@@ -195,88 +254,120 @@ function RenderElement({
   const isTarget = dropTargetId === el.id && draggingId !== el.id;
   const isHorizontal =
     el.styles.display === "flex" && el.styles.flexDirection !== "column";
-  const canHaveChildren = ["section", "navbar", "footer"].includes(el.type);
+  const canHaveChildren = [
+    "div",
+    "section",
+    "article",
+    "aside",
+    "main",
+    "header",
+    "footer",
+    "nav",
+    "form",
+    "navbar",
+  ].includes(el.type);
 
   const {
     gradientType,
     gradientAngle,
     gradientStartColor,
     gradientEndColor,
-    backgroundImage: rawBgImage,
+    lineClamp,
     ...restStyles
   } = el.styles as any;
-
-  const resolvedBgImage = rawBgImage
-    ? rawBgImage.startsWith("url(")
-      ? rawBgImage
-      : `url("${rawBgImage}")`
-    : undefined;
 
   const wrapperStyle: React.CSSProperties = {
     position: (restStyles.position as any) || "relative",
     cursor: "grab",
     opacity: draggingId === el.id ? 0.3 : (restStyles.opacity ?? 1),
-    overflow: (restStyles.overflow as any) || "visible",
+    overflow: (restStyles.overflow as any) || undefined,
     boxSizing: "border-box",
-    outline: isSelected
-      ? "2px solid #2563eb"
-      : isHovered
-        ? "1.5px solid #60a5fa"
-        : isTarget && dropPos === "inside"
-          ? "2px dashed #2563eb"
-          : "none",
-    outlineOffset: "-2px",
     ...restStyles,
-    ...(resolvedBgImage &&
-    !(gradientType === "linear" && gradientStartColor && gradientEndColor)
+    outline: isSelected
+      ? "2px dotted #0d99ff"
+      : isHovered
+        ? "2px dotted rgba(13, 153, 255, 0.8)"
+        : isTarget && dropPos === "inside"
+          ? "2px dashed #0d99ff"
+          : "none",
+    outlineOffset: "0px",
+    zIndex: isSelected ? 100 : isHovered ? 99 : (restStyles.zIndex as any),
+    ...(gradientType === "linear" && gradientStartColor && gradientEndColor
       ? {
-          backgroundImage: resolvedBgImage,
-          backgroundSize: restStyles.backgroundSize || "cover",
-          backgroundPosition: restStyles.backgroundPosition || "center",
+          backgroundImage: `linear-gradient(${gradientAngle ?? 135}deg, ${gradientStartColor}, ${gradientEndColor})`,
         }
       : {}),
-    ...(gradientType === "linear"
+    ...(lineClamp
       ? {
-          backgroundImage: `linear-gradient(${gradientAngle ?? 135}deg, ${gradientStartColor || "#4f46e5"}, ${gradientEndColor || "#9333ea"})`,
+          display: "-webkit-box",
+          WebkitLineClamp: Number(lineClamp),
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
         }
-      : gradientType === "radial"
-        ? {
-            backgroundImage: `radial-gradient(circle, ${gradientStartColor || "#4f46e5"}, ${gradientEndColor || "#9333ea"})`,
-          }
-        : {}),
+      : {}),
   };
 
-  return (
-    <div
-      style={wrapperStyle}
-      onClick={(e) => {
-        e.stopPropagation();
-        selectElement(el.id);
-      }}
-      onMouseEnter={(e) => {
-        e.stopPropagation();
-        setHoveredElement(el.id);
-      }}
-      onMouseLeave={() => setHoveredElement(null)}
-      draggable
-      onDragStart={(e) => {
-        e.stopPropagation();
-        e.dataTransfer.setData("sourceElementId", el.id);
-        onReorderDragStart(e, el.id);
-      }}
-      onDragOver={(e) =>
-        onReorderDragOver(
-          e,
-          el.id,
-          index,
-          parentId,
-          parentIsHorizontal,
-          canHaveChildren,
-        )
+  const TAG_MAP: Record<string, string> = {
+    div: "div",
+    section: "section",
+    article: "article",
+    aside: "aside",
+    main: "main",
+  };
+  const htmlTag = (el as any).htmlTag || TAG_MAP[el.type] || "div";
+
+  const wrapperProps: any = {
+    style: wrapperStyle,
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      selectElement(el.id);
+    },
+    onDoubleClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+
+      if (el.href) {
+        const cleanHref = el.href.startsWith("/") ? el.href : `/${el.href}`;
+        const targetPage = pages.find(
+          (p) =>
+            p.slug === cleanHref ||
+            p.name.toLowerCase() === cleanHref.slice(1).toLowerCase(),
+        );
+
+        if (targetPage) {
+          setActivePage(targetPage.id);
+        } else if (cleanHref.startsWith("/")) {
+          alert(`Error: Page "${cleanHref}" not found in this project.`);
+        }
       }
-      onDrop={(e) => onReorderDrop(e, el.id, index, parentId)}
-      onContextMenu={(e) => onContextMenu(e, el.id)}
-    >
+    },
+    onMouseEnter: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setHoveredElement(el.id);
+    },
+    onMouseLeave: () => setHoveredElement(null),
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.stopPropagation();
+      e.dataTransfer.setData("sourceElementId", el.id);
+      onReorderDragStart(e, el.id);
+    },
+    onDragOver: (e: React.DragEvent) =>
+      onReorderDragOver(
+        e,
+        el.id,
+        index,
+        parentId,
+        parentIsHorizontal,
+        canHaveChildren,
+      ),
+    onDrop: (e: React.DragEvent) => onReorderDrop(e, el.id, index, parentId),
+    onContextMenu: (e: React.MouseEvent) => onContextMenu(e, el.id),
+  };
+
+  return React.createElement(
+    htmlTag,
+    wrapperProps,
+    <>
       {isTarget && dropPos !== "inside" && (
         <div
           className="absolute bg-blue-500 z-50 pointer-events-none rounded-full"
@@ -335,10 +426,292 @@ function RenderElement({
             pointerEvents: "none",
           }}
         />
+      ) : el.type === "video" ? (
+        <video
+          src={el.videoSrc}
+          poster={el.videoPoster}
+          controls={el.controls}
+          autoPlay={el.autoPlay}
+          muted={el.muted}
+          loop={el.loop}
+          className="w-full h-full object-cover pointer-events-none"
+          style={{ backgroundColor: "#000" }}
+        />
+      ) : el.type === "audio" ? (
+        <div className="w-full p-2 bg-gray-50 rounded-lg flex items-center gap-2">
+          <audio
+            src={el.src}
+            controls={el.controls}
+            autoPlay={el.autoPlay}
+            loop={el.loop}
+            className="w-full h-8 pointer-events-none"
+          />
+        </div>
+      ) : el.type === "iframe" ? (
+        <div
+          style={{
+            pointerEvents: "none",
+            width: "100%",
+            minHeight: 80,
+            background: "#f3f4f6",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 4,
+          }}
+        >
+          <span style={{ fontSize: 12, color: "#9ca3af" }}>⬜ iFrame</span>
+        </div>
+      ) : el.type === "divider" ? (
+        <hr
+          style={{
+            pointerEvents: "none",
+            border: "none",
+            borderTop: el.styles.borderTop || "1px solid #e5e7eb",
+            width: "100%",
+          }}
+        />
+      ) : el.type === "spacer" ? (
+        <div
+          style={{
+            pointerEvents: "none",
+            width: "100%",
+            height: el.styles.height || "48px",
+            background:
+              "repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(148,163,184,0.15) 4px, rgba(148,163,184,0.15) 8px)",
+          }}
+        />
+      ) : el.type === "list" ? (
+        <ul
+          style={{
+            pointerEvents: "none",
+            paddingLeft: 20,
+            listStyleType: el.styles.listStyleType || "disc",
+          }}
+        >
+          {(el.listItems || ["Item 1", "Item 2"]).map((item, i) => (
+            <li key={i}>{item}</li>
+          ))}
+        </ul>
+      ) : el.type === "orderedList" ? (
+        <ol
+          style={{
+            pointerEvents: "none",
+            paddingLeft: 20,
+            listStyleType: el.styles.listStyleType || "decimal",
+          }}
+        >
+          {(el.listItems || ["Item 1", "Item 2"]).map((item, i) => (
+            <li key={i}>{item}</li>
+          ))}
+        </ol>
+      ) : el.type === "table" ? (
+        (() => {
+          const td = (el as any).tableData || {
+            headers: ["H1", "H2", "H3"],
+            rows: [
+              ["", "", ""],
+              ["", "", ""],
+            ],
+          };
+          return (
+            <table
+              style={{
+                pointerEvents: "none",
+                width: "100%",
+                borderCollapse: el.styles.borderCollapse || "collapse",
+                fontSize: 13,
+              }}
+            >
+              <thead
+                style={{
+                  backgroundColor: el.styles.tableHeaderBackground || "#f9fafb",
+                }}
+              >
+                <tr>
+                  {td.headers.map((h: string, i: number) => (
+                    <th
+                      key={i}
+                      style={{
+                        padding: el.styles.tableCellPadding || "6px 12px",
+                        textAlign: "left",
+                        border: "1px solid #e5e7eb",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {td.rows.map((row: string[], ri: number) => (
+                  <tr
+                    key={ri}
+                    style={{
+                      backgroundColor:
+                        el.styles.tableStripe && ri % 2 === 1
+                          ? "#f9fafb"
+                          : "white",
+                    }}
+                  >
+                    {row.map((cell: string, ci: number) => (
+                      <td
+                        key={ci}
+                        style={{
+                          padding: el.styles.tableCellPadding || "6px 12px",
+                          border: "1px solid #e5e7eb",
+                        }}
+                      >
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()
+      ) : el.type === "checkbox" ? (
+        <label
+          style={{
+            pointerEvents: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            readOnly
+            checked={!!el.checked}
+            style={{ pointerEvents: "none" }}
+          />
+          <span>{el.content || "Checkbox"}</span>
+        </label>
+      ) : el.type === "radio" ? (
+        <label
+          style={{
+            pointerEvents: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <input type="radio" readOnly style={{ pointerEvents: "none" }} />
+          <span>{el.content || "Option"}</span>
+        </label>
+      ) : el.type === "select" ? (
+        <select
+          disabled
+          style={{
+            pointerEvents: "none",
+            width: "100%",
+            padding: "8px 12px",
+            borderRadius: 6,
+            border: "1px solid #d1d5db",
+            fontSize: 14,
+            color: "#111827",
+            backgroundColor: "#fff",
+          }}
+        >
+          {(el.selectOptions || ["Option 1", "Option 2"]).map((o, i) => (
+            <option key={i}>{o}</option>
+          ))}
+        </select>
+      ) : el.type === "input" ? (
+        <input
+          readOnly
+          placeholder={el.placeholder || "Input"}
+          style={{
+            pointerEvents: "none",
+            width: "100%",
+            padding: "8px 12px",
+            borderRadius: 6,
+            border: "1px solid #d1d5db",
+            fontSize: 14,
+            color: "#9ca3af",
+            backgroundColor: "#fff",
+            boxSizing: "border-box",
+          }}
+        />
+      ) : el.type === "textarea" ? (
+        <textarea
+          readOnly
+          placeholder={el.placeholder || "Textarea"}
+          style={{
+            pointerEvents: "none",
+            width: "100%",
+            padding: "8px 12px",
+            borderRadius: 6,
+            border: "1px solid #d1d5db",
+            fontSize: 14,
+            color: "#9ca3af",
+            backgroundColor: "#fff",
+            minHeight: 80,
+            resize: "none",
+            boxSizing: "border-box",
+          }}
+        />
+      ) : el.type === "badge" ? (
+        <span style={{ pointerEvents: "none", display: "inline-block" }}>
+          {el.content || "Badge"}
+        </span>
+      ) : el.type === "icon" ? (
+        (() => {
+          const name = el.iconName || "Sparkles";
+          const normalized = name
+            .split(/[-_\s]+/)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join("");
+          const Icon = (LucideIcons as any)[normalized];
+          if (!Icon)
+            return (
+              <span style={{ pointerEvents: "none" }}>{el.content || "★"}</span>
+            );
+          return (
+            <Icon
+              size={el.styles.fontSize ? parseInt(el.styles.fontSize) : 24}
+              color={el.styles.color || "currentColor"}
+              style={{ pointerEvents: "none" }}
+            />
+          );
+        })()
+      ) : el.type === "code" ? (
+        <code style={{ pointerEvents: "none", display: "inline-block" }}>
+          {el.content || "code"}
+        </code>
+      ) : el.type === "pre" ? (
+        <pre style={{ pointerEvents: "none", margin: 0 }}>
+          {el.content || "// code"}
+        </pre>
+      ) : el.type === "blockquote" ? (
+        <blockquote style={{ pointerEvents: "none", margin: 0 }}>
+          {el.content || "Quote"}
+        </blockquote>
       ) : (
         <>
-          {el.content && (
+          {el.content ? (
             <span style={{ pointerEvents: "none" }}>{el.content}</span>
+          ) : (
+            el.children &&
+            el.children.length === 0 && (
+              <div
+                style={{
+                  pointerEvents: "none",
+                  padding: "16px",
+                  textAlign: "center",
+                  color: "rgba(148,163,184,0.5)",
+                  fontSize: 11,
+                  border: "1px dashed rgba(148,163,184,0.2)",
+                  borderRadius: 4,
+                  userSelect: "none",
+                }}
+              >
+                {el.type} — drop elements here
+              </div>
+            )
           )}
           {el.children?.map((child, childIndex) => (
             <RenderElement
@@ -358,14 +731,41 @@ function RenderElement({
           ))}
         </>
       )}
-    </div>
+    </>,
   );
 }
 
 export default function Canvas() {
-  const { getActivePage, addElement, selectElement, reorderElement } =
-    useBuilderStore();
+  const {
+    getActivePage,
+    addElement,
+    selectElement,
+    reorderElement,
+    insertComponent,
+    deleteElement,
+    selectedElementId,
+  } = useBuilderStore();
   const page = getActivePage();
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (!selectedElementId) return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        const active = document.activeElement;
+        const isEditing =
+          active &&
+          (active.tagName === "INPUT" ||
+            active.tagName === "TEXTAREA" ||
+            (active as HTMLElement).isContentEditable);
+        if (!isEditing) {
+          e.preventDefault();
+          deleteElement(selectedElementId);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [selectedElementId, deleteElement]);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -382,26 +782,6 @@ export default function Canvas() {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, elId });
-  }, []);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
-      const tag = (e.target as HTMLElement).tagName;
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        (e.target as HTMLElement).isContentEditable
-      )
-        return;
-      const { selectedElementId, deleteElement } = useBuilderStore.getState();
-      if (selectedElementId) {
-        e.preventDefault();
-        deleteElement(selectedElementId);
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   if (!page) return null;
@@ -432,12 +812,13 @@ export default function Canvas() {
           flexDirection: "column",
           minHeight: hasElements ? 0 : "calc(100vh - 200px)",
           transition: "background-color 0.25s, box-shadow 0.25s",
-          overflow: "hidden",
         }}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           const newType = e.dataTransfer.getData("elementType") as ElementType;
-          if (newType && !hasElements) addElement(defaultElement(newType));
+          const compId = e.dataTransfer.getData("componentId");
+          if (compId) insertComponent(compId);
+          else if (newType && !hasElements) addElement(defaultElement(newType));
         }}
       >
         {!hasElements ? (
@@ -541,7 +922,9 @@ export default function Canvas() {
                       ? targetIndex + 1
                       : targetIndex;
 
-                if (newType)
+                const compId = e.dataTransfer.getData("componentId");
+                if (compId) insertComponent(compId, finalParentId, finalIndex);
+                else if (newType)
                   addElement(
                     defaultElement(newType),
                     finalParentId,

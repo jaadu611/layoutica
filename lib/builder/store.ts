@@ -1,8 +1,41 @@
 import { create } from "zustand";
-import { BuilderState, CanvasElement, HistoryEntry, Page } from "./types";
+import {
+  BuilderState,
+  CanvasElement,
+  HistoryEntry,
+  Page,
+  SavedComponent,
+} from "./types";
 
 const MAX_HISTORY = 50;
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+const COMPONENTS_KEY = "buildify-components";
+
+function loadComponents(): SavedComponent[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(COMPONENTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveComponents(components: SavedComponent[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(COMPONENTS_KEY, JSON.stringify(components));
+  } catch {}
+}
+
+function deepCloneWithNewIds(el: CanvasElement): CanvasElement {
+  return {
+    ...el,
+    id: `el-${generateId()}`,
+    children: el.children?.map(deepCloneWithNewIds),
+  };
+}
 
 const defaultPage: Page = {
   id: "page-1",
@@ -26,31 +59,89 @@ const defaultPage: Page = {
       children: [],
     },
     {
-      id: "el-section-default",
+      id: "el-hero-default",
       type: "section",
       styles: {
         backgroundColor: "#f9fafb",
-        padding: "64px 32px",
+        padding: "80px 32px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         gap: "24px",
-        minHeight: "400px",
         width: "100%",
+        minHeight: "500px",
       },
       children: [
+        {
+          id: "el-badge-default",
+          type: "badge",
+          content: "New",
+          styles: {
+            backgroundColor: "#eff6ff",
+            color: "#3b82f6",
+            fontSize: "12px",
+            fontWeight: "600",
+            padding: "4px 12px",
+            borderRadius: "999px",
+            display: "inline-block",
+          },
+        },
         {
           id: "el-heading-default",
           type: "heading",
           content: "Welcome to your site",
           styles: {
-            fontSize: "48px",
+            fontSize: "56px",
             fontWeight: "700",
             color: "#111827",
             textAlign: "center",
+            lineHeight: "1.1",
+            maxWidth: "700px",
+          },
+        },
+        {
+          id: "el-paragraph-default",
+          type: "paragraph",
+          content:
+            "Build beautiful websites visually. Export clean, production-ready React code.",
+          styles: {
+            fontSize: "18px",
+            color: "#6b7280",
+            textAlign: "center",
+            maxWidth: "520px",
+            lineHeight: "1.7",
+          },
+        },
+        {
+          id: "el-button-default",
+          type: "button",
+          content: "Get Started",
+          href: "#",
+          styles: {
+            backgroundColor: "#111827",
+            color: "#ffffff",
+            padding: "14px 32px",
+            borderRadius: "8px",
+            fontSize: "15px",
+            fontWeight: "600",
+            cursor: "pointer",
+            display: "inline-block",
           },
         },
       ],
+    },
+    {
+      id: "el-footer-default",
+      type: "footer",
+      content: "© 2025 MySite. All rights reserved.",
+      styles: {
+        backgroundColor: "#111827",
+        color: "#9ca3af",
+        padding: "24px 32px",
+        textAlign: "center",
+        fontSize: "14px",
+        width: "100%",
+      },
     },
   ],
 };
@@ -66,6 +157,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   hoveredElementId: null,
   past: [],
   future: [],
+  components: loadComponents(),
 
   undo: () => {
     const { past, pages, activePageId, future } = get();
@@ -329,6 +421,68 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       ),
       selectedElementId: (cloned as CanvasElement).id,
       past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
+      future: [],
+    });
+  },
+
+  saveComponent: (name, element) => {
+    const comp: SavedComponent = {
+      id: `comp-${generateId()}`,
+      name,
+      element: deepCloneWithNewIds(element),
+      createdAt: Date.now(),
+    };
+    const updated = [...get().components, comp];
+    saveComponents(updated);
+    set({ components: updated });
+  },
+
+  deleteComponent: (id) => {
+    const updated = get().components.filter((c) => c.id !== id);
+    saveComponents(updated);
+    set({ components: updated });
+  },
+
+  renameComponent: (id, name) => {
+    const updated = get().components.map((c) =>
+      c.id === id ? { ...c, name } : c,
+    );
+    saveComponents(updated);
+    set({ components: updated });
+  },
+
+  insertComponent: (componentId, parentId, targetIndex) => {
+    const comp = get().components.find((c) => c.id === componentId);
+    if (!comp) return;
+    const clone = deepCloneWithNewIds(comp.element);
+    const { pages, activePageId, past } = get();
+
+    const insertIntoArray = (arr: CanvasElement[]) => {
+      const newArr = [...(arr || [])];
+      const index = targetIndex !== undefined ? targetIndex : newArr.length;
+      newArr.splice(index, 0, clone);
+      return newArr;
+    };
+
+    set({
+      pages: pages.map((p) => {
+        if (p.id !== activePageId) return p;
+        if (!parentId) return { ...p, elements: insertIntoArray(p.elements) };
+        const addToParent = (elements: CanvasElement[]): CanvasElement[] =>
+          elements.map((el) => {
+            if (el.id === parentId)
+              return { ...el, children: insertIntoArray(el.children || []) };
+            if (el.children)
+              return { ...el, children: addToParent(el.children) };
+            return el;
+          });
+        return { ...p, elements: addToParent(p.elements) };
+      }),
+      selectedElementId: clone.id,
+      past: [
+        ...past,
+        { pages: JSON.parse(JSON.stringify(pages)), activePageId },
+      ].slice(-MAX_HISTORY),
       future: [],
     });
   },

@@ -134,10 +134,10 @@ function stylesToAttrs(
     "textAlign",
     "fontWeight",
     "fontFamily",
-    "gradientType",
     "gradientAngle",
     "gradientStartColor",
     "gradientEndColor",
+    "lineClamp",
   ]);
 
   for (const [key, val] of Object.entries(styles)) {
@@ -153,6 +153,13 @@ function stylesToAttrs(
     const angle = styles.gradientAngle ?? 135;
     style["backgroundImage"] =
       `linear-gradient(${angle}deg, ${styles.gradientStartColor}, ${styles.gradientEndColor})`;
+  }
+
+  if (styles.lineClamp) {
+    style["display"] = "-webkit-box";
+    style["WebkitLineClamp"] = styles.lineClamp.toString();
+    style["WebkitBoxOrient"] = '"vertical"';
+    style["overflow"] = "hidden";
   }
 
   return { className: cls.join(" "), style, fontClassName };
@@ -180,50 +187,156 @@ function elementToJSX(
   const classAttr = combinedClass
     ? fontClassName
       ? ` className={\`${combinedClass}\`}`
-      : ` className="${className}"`
+      : ` className="${combinedClass}"`
     : "";
+
+  const idAttr = "";
 
   const styleAttr =
     Object.keys(style).length > 0 ? ` style={${serializeStyle(style)}}` : "";
 
+  const kids = (el.children || [])
+    .map((c) => elementToJSX(c, usedFonts, indent + 2))
+    .join("\n");
+
   switch (el.type) {
     case "heading":
-      return `${pad}<h1${classAttr}${styleAttr}>${el.content || "Heading"}</h1>`;
+      return `${pad}<h1${idAttr}${classAttr}${styleAttr}>${el.content || "Heading"}</h1>`;
+
+    case "heading2":
+      return `${pad}<h2${idAttr}${classAttr}${styleAttr}>${el.content || "Heading"}</h2>`;
+
+    case "heading3":
+      return `${pad}<h3${idAttr}${classAttr}${styleAttr}>${el.content || "Heading"}</h3>`;
 
     case "text":
-      return `${pad}<p${classAttr}${styleAttr}>${el.content || "Text"}</p>`;
+    case "paragraph":
+      return `${pad}<p${idAttr}${classAttr}${styleAttr}>${el.content || "Text"}</p>`;
+
+    case "link": {
+      const linkTarget = el.target ? ` target="${el.target}"` : "";
+      const linkRel =
+        el.target === "_blank" ? ` rel="noopener noreferrer"` : "";
+      return `${pad}<a href="${el.href || "#"}"${linkTarget}${linkRel}${idAttr}${classAttr}${styleAttr}>${el.content || "Link"}</a>`;
+    }
+
+    case "badge":
+      return `${pad}<span${idAttr}${classAttr}${styleAttr}>${el.content || "Badge"}</span>`;
 
     case "button": {
-      const target = el.target ? ` target="${el.target}"` : "";
-      const rel = el.target === "_blank" ? ` rel="noopener noreferrer"` : "";
-      return `${pad}<a href="${el.href || "#"}"${target}${rel}${classAttr}${styleAttr}>\n${pad}  ${el.content || "Button"}\n${pad}</a>`;
+      const btnTarget = el.target ? ` target="${el.target}"` : "";
+      const btnRel = el.target === "_blank" ? ` rel="noopener noreferrer"` : "";
+      return `${pad}<a href="${el.href || "#"}"${btnTarget}${btnRel}${idAttr}${classAttr}${styleAttr}>\n${pad}  ${el.content || "Button"}\n${pad}</a>`;
     }
 
     case "image":
-      return `${pad}<img src="${el.src || "/placeholder.jpg"}" alt="${el.alt || "image"}"${classAttr}${styleAttr} />`;
+      return `${pad}<img src="${el.src || "/placeholder.jpg"}" alt="${el.alt || "image"}"${idAttr}${classAttr}${styleAttr} />`;
+
+    case "video":
+      return `${pad}<video${idAttr}${classAttr}${styleAttr}${el.controls ? " controls" : ""}${el.autoPlay ? " autoPlay" : ""}${el.muted ? " muted" : ""}${el.loop ? " loop" : ""}${el.videoPoster ? ` poster="${el.videoPoster}"` : ""}>\n${pad}  <source src="${el.videoSrc || ""}" />\n${pad}</video>`;
+
+    case "divider":
+      return `${pad}<hr${idAttr}${classAttr}${styleAttr} />`;
+
+    case "spacer":
+      return `${pad}<div${idAttr}${classAttr}${styleAttr} aria-hidden="true" />`;
+
+    case "icon":
+      return `${pad}<span${idAttr}${classAttr}${styleAttr} aria-hidden="true">${el.content || "★"}</span>`;
+
+    case "input":
+      return `${pad}<input type="text" placeholder="${el.placeholder || ""}"${idAttr}${classAttr}${styleAttr} />`;
+
+    case "textarea":
+      return `${pad}<textarea placeholder="${el.placeholder || ""}"${idAttr}${classAttr}${styleAttr} />`;
+
+    case "select": {
+      const opts = (el.selectOptions || ["Option 1", "Option 2"])
+        .map((o) => `${pad}  <option value="${o}">${o}</option>`)
+        .join("\n");
+      return `${pad}<select${idAttr}${classAttr}${styleAttr}>\n${opts}\n${pad}</select>`;
+    }
+
+    case "checkbox":
+      return `${pad}<label${idAttr}${classAttr}${styleAttr}>\n${pad}  <input type="checkbox"${el.checked ? " defaultChecked" : ""} />\n${pad}  <span>${el.content || "Label"}</span>\n${pad}</label>`;
+
+    case "list": {
+      const items = (el.listItems || ["Item 1", "Item 2", "Item 3"])
+        .map((item) => `${pad}  <li>${item}</li>`)
+        .join("\n");
+      return `${pad}<ul${idAttr}${classAttr}${styleAttr}>\n${items}\n${pad}</ul>`;
+    }
 
     case "navbar": {
-      const childrenJSX = (el.children || [])
+      const navKids = (el.children || [])
         .map((c) => elementToJSX(c, usedFonts, indent + 4))
         .join("\n");
       const navLinks =
-        childrenJSX ||
+        navKids ||
         `${pad}    <a href="/">Home</a>\n${pad}    <a href="/about">About</a>\n${pad}    <a href="/contact">Contact</a>`;
-      return `${pad}<nav${classAttr}${styleAttr}>\n${pad}  <span style={{fontWeight: "700", fontSize: "20px"}}>${el.content || "Brand"}</span>\n${pad}  <div className="flex gap-6">\n${navLinks}\n${pad}  </div>\n${pad}</nav>`;
+      return `${pad}<nav${idAttr}${classAttr}${styleAttr}>\n${pad}  <span style={{fontWeight: "700", fontSize: "20px"}}>${el.content || "Brand"}</span>\n${pad}  <div className="flex gap-6">\n${navLinks}\n${pad}  </div>\n${pad}</nav>`;
     }
 
     case "footer":
-      return `${pad}<footer${classAttr}${styleAttr}>\n${pad}  ${el.content || "Footer"}\n${pad}</footer>`;
+      return `${pad}<footer${idAttr}${classAttr}${styleAttr}>\n${pad}  ${el.content || "Footer"}\n${pad}</footer>`;
 
-    case "section": {
-      const childrenJSX = (el.children || [])
-        .map((c) => elementToJSX(c, usedFonts, indent + 2))
+    case "div":
+    case "section":
+    case "article":
+    case "aside":
+    case "main":
+    case "header":
+    case "nav":
+    case "form": {
+      const tag = (el as any).htmlTag || el.type;
+      return `${pad}<${tag}${idAttr}${classAttr}${styleAttr}>\n${kids || `${pad}  `}\n${pad}</${tag}>`;
+    }
+
+    case "span":
+      return `${pad}<span${idAttr}${classAttr}${styleAttr}>${el.content || ""}</span>`;
+
+    case "blockquote":
+      return `${pad}<blockquote${idAttr}${classAttr}${styleAttr}>${el.content || ""}</blockquote>`;
+
+    case "code":
+      return `${pad}<code${idAttr}${classAttr}${styleAttr}>${el.content || ""}</code>`;
+
+    case "pre":
+      return `${pad}<pre${idAttr}${classAttr}${styleAttr}>${el.content || ""}</pre>`;
+
+    case "orderedList": {
+      const oItems = (el.listItems || ["Item 1", "Item 2"])
+        .map((item) => `${pad}  <li>${item}</li>`)
         .join("\n");
-      return `${pad}<section${classAttr}${styleAttr}>\n${childrenJSX || `${pad}  `}\n${pad}</section>`;
+      return `${pad}<ol${idAttr}${classAttr}${styleAttr}>\n${oItems}\n${pad}</ol>`;
+    }
+
+    case "audio":
+      return `${pad}<audio${idAttr}${classAttr}${styleAttr}${el.controls ? " controls" : ""}${el.autoPlay ? " autoPlay" : ""}${el.muted ? " muted" : ""}${el.loop ? " loop" : ""}>\n${pad}  <source src="${el.videoSrc || ""}" />\n${pad}</audio>`;
+
+    case "iframe":
+      return `${pad}<iframe src="${el.src || ""}"${idAttr}${classAttr}${styleAttr} />`;
+
+    case "radio":
+      return `${pad}<label${idAttr}${classAttr}${styleAttr}>\n${pad}  <input type="radio" />\n${pad}  <span>${el.content || "Option"}</span>\n${pad}</label>`;
+
+    case "table": {
+      const td = (el as any).tableData || {
+        headers: ["Header 1", "Header 2", "Header 3"],
+        rows: [["Cell", "Cell", "Cell"]],
+      };
+      const ths = td.headers.map((h: string) => `<th>${h}</th>`).join("");
+      const trs = td.rows
+        .map(
+          (row: string[]) =>
+            `<tr>${row.map((cell: string) => `<td>${cell}</td>`).join("")}</tr>`,
+        )
+        .join(`\n${pad}    `);
+      return `${pad}<table${idAttr}${classAttr}${styleAttr}>\n${pad}  <thead><tr>${ths}</tr></thead>\n${pad}  <tbody>\n${pad}    ${trs}\n${pad}  </tbody>\n${pad}</table>`;
     }
 
     default:
-      return `${pad}<div${classAttr}${styleAttr}>${el.content || ""}</div>`;
+      return `${pad}<div${idAttr}${classAttr}${styleAttr}>${el.content || ""}</div>`;
   }
 }
 

@@ -1,14 +1,59 @@
 export type ElementType =
-  | "text"
-  | "heading"
-  | "image"
-  | "button"
+  // Layout
+  | "div"
   | "section"
+  | "article"
+  | "aside"
+  | "main"
+  | "header"
+  | "nav"
+  | "form"
+  | "footer"
+  // Presets (semantic shortcuts)
   | "navbar"
-  | "footer";
+  // Typography
+  | "heading"
+  | "heading2"
+  | "heading3"
+  | "paragraph"
+  | "text"
+  | "span"
+  | "link"
+  | "blockquote"
+  | "code"
+  | "pre"
+  // Lists
+  | "list"
+  | "orderedList"
+  // Media
+  | "image"
+  | "video"
+  | "audio"
+  | "iframe"
+  // Decorative
+  | "icon"
+  | "badge"
+  | "divider"
+  | "spacer"
+  // Interactive
+  | "button"
+  | "input"
+  | "textarea"
+  | "select"
+  | "checkbox"
+  | "radio"
+  // Table
+  | "table";
 
 export interface StyleProps {
-  display?: "block" | "flex" | "grid" | "none" | "inline-block";
+  display?:
+    | "block"
+    | "flex"
+    | "grid"
+    | "none"
+    | "inline-block"
+    | "inline-flex"
+    | "inline";
   flexDirection?: "row" | "column" | "row-reverse" | "column-reverse";
   justifyContent?:
     | "flex-start"
@@ -20,9 +65,15 @@ export interface StyleProps {
   alignItems?: "flex-start" | "center" | "flex-end" | "stretch" | "baseline";
   flexWrap?: "wrap" | "nowrap" | "wrap-reverse";
   gap?: string;
+  columnGap?: string;
+  rowGap?: string;
   flexGrow?: number;
   flexShrink?: number;
+  flexBasis?: string;
   gridTemplateColumns?: string;
+  gridTemplateRows?: string;
+  gridColumn?: string;
+  gridRow?: string;
   zIndex?: number;
   position?: "static" | "relative" | "absolute" | "fixed" | "sticky";
   top?: string;
@@ -59,6 +110,8 @@ export interface StyleProps {
   textDecoration?: "none" | "underline" | "line-through";
   fontStyle?: "normal" | "italic";
   whiteSpace?: "normal" | "nowrap" | "pre" | "pre-wrap" | "pre-line";
+  textOverflow?: "clip" | "ellipsis";
+  lineClamp?: string | number;
 
   backgroundColor?: string;
   backgroundImage?: string;
@@ -69,6 +122,7 @@ export interface StyleProps {
   borderRadius?: string;
   boxShadow?: string;
   backdropFilter?: string;
+  filter?: string;
 
   borderWidth?: string;
   borderStyle?: "solid" | "dashed" | "dotted" | "none";
@@ -83,9 +137,21 @@ export interface StyleProps {
   transition?: string;
   transform?: string;
   overflow?: "visible" | "hidden" | "scroll" | "auto";
+  overflowX?: "visible" | "hidden" | "scroll" | "auto";
+  overflowY?: "visible" | "hidden" | "scroll" | "auto";
   objectFit?: "fill" | "contain" | "cover" | "none" | "scale-down";
   userSelect?: "auto" | "text" | "none" | "all";
   pointerEvents?: "auto" | "none";
+  resize?: "none" | "both" | "horizontal" | "vertical";
+  
+  borderCollapse?: "collapse" | "separate";
+  tableStripe?: boolean;
+  tableHeaderBackground?: string;
+  tableCellPadding?: string;
+
+  appearance?: string;
+  listStyleType?: "none" | "disc" | "decimal" | "square" | "circle";
+  listStylePosition?: "inside" | "outside";
 
   gradientType?: "linear" | "radial" | "none";
   gradientAngle?: number;
@@ -101,8 +167,22 @@ export interface CanvasElement {
   alt?: string;
   href?: string;
   target?: "_blank" | "_self";
+  placeholder?: string;
+  iconName?: string;
+  videoSrc?: string;
+  iframeSrc?: string;
+  videoPoster?: string;
+  autoPlay?: boolean;
+  muted?: boolean;
+  loop?: boolean;
+  controls?: boolean;
+  checked?: boolean;
+  listItems?: string[];
+  selectOptions?: string[];
+  tableData?: { headers: string[]; rows: string[][] };
   children?: CanvasElement[];
   styles: StyleProps;
+  htmlTag?: string;
   tailwindClasses?: string;
   metadata?: {
     name?: string;
@@ -123,6 +203,13 @@ export interface HistoryEntry {
   activePageId: string;
 }
 
+export interface SavedComponent {
+  id: string;
+  name: string;
+  element: CanvasElement;
+  createdAt: number;
+}
+
 export interface BuilderState {
   pages: Page[];
   activePageId: string;
@@ -130,6 +217,7 @@ export interface BuilderState {
   hoveredElementId: string | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
+  components: SavedComponent[];
 
   addPage: (name: string) => void;
   deletePage: (id: string) => void;
@@ -157,6 +245,15 @@ export interface BuilderState {
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
+
+  saveComponent: (name: string, element: CanvasElement) => void;
+  deleteComponent: (id: string) => void;
+  renameComponent: (id: string, name: string) => void;
+  insertComponent: (
+    componentId: string,
+    parentId?: string,
+    targetIndex?: number,
+  ) => void;
 
   getActivePage: () => Page | undefined;
   getSelectedElement: () => CanvasElement | undefined;
