@@ -143,7 +143,7 @@ export interface StyleProps {
   userSelect?: "auto" | "text" | "none" | "all";
   pointerEvents?: "auto" | "none";
   resize?: "none" | "both" | "horizontal" | "vertical";
-  
+
   borderCollapse?: "collapse" | "separate";
   tableStripe?: boolean;
   tableHeaderBackground?: string;
@@ -184,6 +184,12 @@ export interface CanvasElement {
   styles: StyleProps;
   htmlTag?: string;
   tailwindClasses?: string;
+  /**
+   * Set when this element was inserted from the Saved Components panel.
+   * Stores the SavedComponent.id so the code generator can reliably match
+   * every instance — regardless of cloned ids — back to its component file.
+   */
+  savedComponentId?: string;
   metadata?: {
     name?: string;
     isHidden?: boolean;
@@ -215,6 +221,7 @@ export interface BuilderState {
   activePageId: string;
   selectedElementId: string | null;
   hoveredElementId: string | null;
+  editingElementId: string | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
   components: SavedComponent[];
@@ -233,6 +240,7 @@ export interface BuilderState {
   deleteElement: (id: string) => void;
   selectElement: (id: string | null) => void;
   setHoveredElement: (id: string | null) => void;
+  setEditingElement: (id: string | null) => void;
   moveElement: (id: string, direction: "up" | "down") => void;
   reorderElement: (
     sourceId: string,

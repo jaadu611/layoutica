@@ -684,15 +684,19 @@ export default function PropertiesPanel() {
 
   const updateStyle = (key: keyof StyleProps, value: any) => {
     let val: any = value;
-    if (key === "opacity") val = value === "" ? undefined : Number(value) / 100;
-    else if (
+
+    if (key === "backgroundImage" && value && !value.includes("url(")) {
+      val = `url("${value}")`;
+    } else if (key === "opacity") {
+      val = value === "" ? undefined : Number(value) / 100;
+    } else if (
       key === "zIndex" ||
       key === "flexGrow" ||
       key === "flexShrink" ||
       key === "gradientAngle"
-    )
+    ) {
       val = value === "" ? undefined : Number(value);
-    else if (
+    } else if (
       (key === "fontSize" ||
         key === "letterSpacing" ||
         key === "width" ||
@@ -705,8 +709,10 @@ export default function PropertiesPanel() {
       typeof value === "string" &&
       value !== "" &&
       !isNaN(Number(value))
-    )
+    ) {
       val = Number(value);
+    }
+
     updateElement(el.id, {
       styles: {
         ...el.styles,
@@ -2005,6 +2011,14 @@ export default function PropertiesPanel() {
               value={el.styles.backgroundImage || ""}
               onChange={(v) => updateStyle("backgroundImage", v)}
               placeholder="https://..."
+            />
+          </Field>
+          <Field label="Or Upload">
+            <MediaPicker
+              value={el.styles.backgroundImage}
+              onChange={(v) => updateStyle("backgroundImage", v)}
+              accept="image/*"
+              label="Upload Image"
             />
           </Field>
           {el.styles.backgroundImage && (

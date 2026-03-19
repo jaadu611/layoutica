@@ -1,3 +1,5 @@
+"use client";
+
 import { create } from "zustand";
 import {
   BuilderState,
@@ -34,6 +36,22 @@ function deepCloneWithNewIds(el: CanvasElement): CanvasElement {
     ...el,
     id: `el-${generateId()}`,
     children: el.children?.map(deepCloneWithNewIds),
+  };
+}
+
+/**
+ * Clone an element for insertion from the components panel.
+ * Preserves savedComponentId on the top-level element so the code generator
+ * can always match any instance back to its SavedComponent — regardless of
+ * how many times it has been inserted or cloned.
+ */
+function deepCloneForInsert(
+  el: CanvasElement,
+  savedComponentId: string,
+): CanvasElement {
+  return {
+    ...deepCloneWithNewIds(el),
+    savedComponentId,
   };
 }
 
@@ -155,6 +173,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   activePageId: "page-1",
   selectedElementId: null,
   hoveredElementId: null,
+  editingElementId: null,
   past: [],
   future: [],
   components: loadComponents(),
@@ -169,6 +188,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       past: past.slice(0, -1),
       future: [snap(pages, activePageId), ...future].slice(0, MAX_HISTORY),
       selectedElementId: null,
+      editingElementId: null,
     });
   },
 
@@ -182,6 +202,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       future: future.slice(1),
       past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
       selectedElementId: null,
+      editingElementId: null,
     });
   },
 
@@ -362,6 +383,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
 
   selectElement: (id) => set({ selectedElementId: id }),
   setHoveredElement: (id) => set({ hoveredElementId: id }),
+  setEditingElement: (id) => set({ editingElementId: id }),
 
   moveElement: (id, direction) => {
     const { pages, activePageId, past } = get();
@@ -392,6 +414,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     const cloneElement = (el: CanvasElement): CanvasElement => ({
       ...el,
       id: `el-${generateId()}`,
+      // Preserve savedComponentId so duplicates still resolve to the component file
       children: el.children ? el.children.map(cloneElement) : undefined,
     });
 
@@ -454,7 +477,11 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   insertComponent: (componentId, parentId, targetIndex) => {
     const comp = get().components.find((c) => c.id === componentId);
     if (!comp) return;
-    const clone = deepCloneWithNewIds(comp.element);
+
+    // Stamp savedComponentId on the clone so the code generator can always
+    // identify this instance as belonging to this saved component.
+    const clone = deepCloneForInsert(comp.element, comp.id);
+
     const { pages, activePageId, past } = get();
 
     const insertIntoArray = (arr: CanvasElement[]) => {
