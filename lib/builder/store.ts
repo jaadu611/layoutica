@@ -166,6 +166,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   pages: [defaultPage],
   activePageId: "page-1",
   selectedElementId: null,
+  stylingState: "default",
   hoveredElementId: null,
   editingElementId: null,
   past: [],
@@ -175,6 +176,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     colors: [],
     typography: [],
   },
+  selectedElementIds: [],
 
   undo: () => {
     const { past, pages, activePageId, future } = get();
@@ -190,6 +192,8 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     });
   },
 
+  setStylingState: (state) => set({ stylingState: state }),
+
   redo: () => {
     const { future, pages, activePageId, past } = get();
     if (future.length === 0) return;
@@ -203,6 +207,22 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       editingElementId: null,
     });
   },
+
+  toggleSelectElement: (id: string) => {
+    const { selectedElementIds, selectedElementId } = get();
+    const current = [
+      ...(selectedElementId ? [selectedElementId] : []),
+      ...selectedElementIds,
+    ].filter((v, i, a) => a.indexOf(v) === i);
+
+    if (current.includes(id)) {
+      set({ selectedElementIds: current.filter((v) => v !== id) });
+    } else {
+      set({ selectedElementIds: [...current, id] });
+    }
+  },
+
+  clearSelection: () => set({ selectedElementIds: [] }),
 
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
@@ -258,7 +278,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     set({
       pages,
       components,
-      designTokens: designTokens || { colors: [], typography: [] }, // Fallback if missing
+      designTokens: designTokens || { colors: [], typography: [] },
       activePageId: pages[0]?.id || "",
       selectedElementId: null,
       hoveredElementId: null,
@@ -349,19 +369,33 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     });
   },
 
-  updateElement: (id, updates) => {
+  updateElement: (id, updates, state = "default") => {
     const { pages, activePageId, past } = get();
+
     const updateInTree = (elements: CanvasElement[]): CanvasElement[] =>
       elements.map((el) => {
-        if (el.id === id)
-          return {
-            ...el,
-            ...updates,
-            styles: { ...el.styles, ...(updates.styles || {}) },
-          };
+        if (el.id === id) {
+          if (updates.styles) {
+            if (state === "hover") {
+              return {
+                ...el,
+                hoverStyles: { ...el.hoverStyles, ...updates.styles },
+              };
+            }
+            if (state === "active") {
+              return {
+                ...el,
+                activeStyles: { ...el.activeStyles, ...updates.styles },
+              };
+            }
+            return { ...el, styles: { ...el.styles, ...updates.styles } };
+          }
+          return { ...el, ...updates };
+        }
         if (el.children) return { ...el, children: updateInTree(el.children) };
         return el;
       });
+
     set({
       pages: pages.map((p) =>
         p.id === activePageId
@@ -393,7 +427,11 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     });
   },
 
-  selectElement: (id) => set({ selectedElementId: id }),
+  selectElement: (id: string | null) =>
+    set({
+      selectedElementId: id,
+      selectedElementIds: [],
+    }),
   setHoveredElement: (id) => set({ hoveredElementId: id }),
   setEditingElement: (id) => set({ editingElementId: id }),
 
@@ -426,7 +464,6 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     const cloneElement = (el: CanvasElement): CanvasElement => ({
       ...el,
       id: `el-${generateId()}`,
-      // Preserve savedComponentId so duplicates still resolve to the component file
       children: el.children ? el.children.map(cloneElement) : undefined,
     });
 
@@ -490,10 +527,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     const comp = get().components.find((c) => c.id === componentId);
     if (!comp) return;
 
-    // Stamp savedComponentId on the clone so the code generator can always
-    // identify this instance as belonging to this saved component.
     const clone = deepCloneForInsert(comp.element, comp.id);
-
     const { pages, activePageId, past } = get();
 
     const insertIntoArray = (arr: CanvasElement[]) => {

@@ -27,6 +27,52 @@ export interface LticaProject {
   };
 }
 
+// ─── Version history ──────────────────────────────────────────────────────────
+// 1.0.0 — initial format
+// 1.1.0 — added savedComponents
+// 1.2.0 — added designTokens
+// 1.3.0 — added hoverStyles / activeStyles / focusStyles on CanvasElement
+//          added formAction / formMethod / fieldName / inputType on elements
+//          added metadata.isHidden / isLocked on CanvasElement
+
+const CURRENT_VERSION = "1.3.0";
+
+// ─── Migration ────────────────────────────────────────────────────────────────
+// Add a new branch here whenever the schema changes in a breaking way.
+
+function migrateProject(project: LticaProject): LticaProject {
+  const v = project.metadata.version ?? "1.0.0";
+
+  // 1.0.0 → 1.1.0: savedComponents didn't exist
+  if (!Array.isArray(project.data.savedComponents)) {
+    project.data.savedComponents = [];
+  }
+
+  // 1.1.0 → 1.2.0: designTokens didn't exist
+  if (!project.data.designTokens) {
+    project.data.designTokens = { colors: [], typography: [] };
+  } else {
+    if (!Array.isArray(project.data.designTokens.colors))
+      project.data.designTokens.colors = [];
+    if (!Array.isArray(project.data.designTokens.typography))
+      project.data.designTokens.typography = [];
+  }
+
+  // 1.2.0 → 1.3.0: viewSettings may be missing
+  if (!project.data.viewSettings) {
+    project.data.viewSettings = {
+      activePageId: project.data.pages[0]?.id ?? "",
+    };
+  }
+
+  // Always stamp the current version so re-saved files are up to date
+  project.metadata.version = CURRENT_VERSION;
+
+  return project;
+}
+
+// ─── Saver / Loader ───────────────────────────────────────────────────────────
+
 export const ProjectSaverLoader = {
   save: (
     name: string,
@@ -39,7 +85,7 @@ export const ProjectSaverLoader = {
       const project: LticaProject = {
         metadata: {
           name: name || "untitled-project",
-          version: "1.2.0",
+          version: CURRENT_VERSION,
           lastUpdated: new Date().toISOString(),
           pageCount: pages.length,
         },
@@ -47,9 +93,7 @@ export const ProjectSaverLoader = {
           pages,
           savedComponents,
           designTokens: tokens,
-          viewSettings: {
-            activePageId,
-          },
+          viewSettings: { activePageId },
         },
       };
 
@@ -61,16 +105,16 @@ export const ProjectSaverLoader = {
       const safeName = (name || "project")
         .toLowerCase()
         .replace(/[^a-z0-9]/gi, "-");
-
       link.href = url;
       link.download = `${safeName}.ltica`;
       document.body.appendChild(link);
       link.click();
-
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
-      throw new Error("Could not export project.");
+      throw new Error(
+        `Could not export project: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   },
 
@@ -78,14 +122,36 @@ export const ProjectSaverLoader = {
     return new Promise((resolve, reject) => {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = ".ltica";
+      input.accept = ".ltica,.json";
+
+      // Handle cancel — supported in modern browsers; prevents the Promise hanging forever
+      input.addEventListener("cancel", () => reject("cancelled"));
+
+      // Fallback cancel detection for browsers that don't fire "cancel":
+      // listen for the window regaining focus after the picker closes with no file
+      let focusFired = false;
+      const onWindowFocus = () => {
+        focusFired = true;
+        // Give the input's onchange a tick to fire first
+        setTimeout(() => {
+          if (!input.files?.length) reject("cancelled");
+        }, 300);
+        window.removeEventListener("focus", onWindowFocus);
+      };
+      window.addEventListener("focus", onWindowFocus);
 
       input.onchange = async (event: Event) => {
-        const target = event.target as HTMLInputElement;
-        const file = target.files?.[0];
+        window.removeEventListener("focus", onWindowFocus);
 
+        const file = (event.target as HTMLInputElement).files?.[0];
         if (!file) {
           reject("No file selected");
+          return;
+        }
+
+        // Guard against absurdly large files
+        if (file.size > 50 * 1024 * 1024) {
+          reject("File too large (max 50 MB)");
           return;
         }
 
@@ -93,13 +159,23 @@ export const ProjectSaverLoader = {
           const text = await file.text();
           const parsed = JSON.parse(text) as LticaProject;
 
-          if (!parsed.metadata || !parsed.data || !parsed.data.pages) {
-            throw new Error("Invalid .ltica file structure.");
+          // Basic structure validation
+          if (
+            !parsed.metadata ||
+            !parsed.data ||
+            !Array.isArray(parsed.data.pages)
+          ) {
+            throw new Error(
+              "Invalid .ltica file structure — missing required fields.",
+            );
           }
 
-          resolve(parsed);
+          // Migrate and backfill optional fields from older versions
+          resolve(migrateProject(parsed));
         } catch (error) {
-          reject("Failed to parse file.");
+          reject(
+            `Failed to parse file: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       };
 

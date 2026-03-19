@@ -7,155 +7,209 @@ import {
   Tablet,
   Smartphone,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   Globe,
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
-import { Page, SavedComponent } from "@/lib/builder/types";
+import { Page, SavedComponent, CanvasElement } from "@/lib/builder/types";
 
-// ─── HTML generator ───────────────────────────────────────────────────────────
-// Converts canvas elements to plain HTML + inline CSS (no React/Next needed).
-// Components are inlined — this is purely a visual preview, not exported code.
+// ─── Style helpers ────────────────────────────────────────────────────────────
 
-import { CanvasElement } from "@/lib/builder/types";
+const STYLE_SKIP = new Set([
+  "gradientType",
+  "gradientAngle",
+  "gradientStartColor",
+  "gradientEndColor",
+  "lineClamp",
+  "tableStripe",
+  "tableHeaderBackground",
+  "tableCellPadding",
+]);
 
-function styleToCSS(styles: CanvasElement["styles"]): string {
-  const skip = new Set([
-    "gradientType",
-    "gradientAngle",
-    "gradientStartColor",
-    "gradientEndColor",
-    "lineClamp",
-    "tableStripe",
-    "tableHeaderBackground",
-    "tableCellPadding",
-  ]);
+function styleToCSS(styles: Record<string, any>): string {
   const props: string[] = [];
-
   for (const [key, val] of Object.entries(styles)) {
-    if (val === undefined || val === "" || skip.has(key)) continue;
-    // camelCase → kebab-case
+    if (val === undefined || val === "" || STYLE_SKIP.has(key)) continue;
     const cssKey = key.replace(/([A-Z])/g, (m) => `-${m.toLowerCase()}`);
     props.push(`${cssKey}: ${val}`);
   }
-
-  // gradient override
   if (
     styles.gradientType === "linear" &&
     styles.gradientStartColor &&
     styles.gradientEndColor
-  ) {
+  )
     props.push(
       `background-image: linear-gradient(${styles.gradientAngle ?? 135}deg, ${styles.gradientStartColor}, ${styles.gradientEndColor})`,
     );
-  }
-  if (styles.lineClamp) {
+  if (styles.lineClamp)
     props.push(
       `display: -webkit-box`,
       `-webkit-line-clamp: ${styles.lineClamp}`,
       `-webkit-box-orient: vertical`,
       `overflow: hidden`,
     );
-  }
-
   return props.join("; ");
 }
+
+// !important is essential — it must beat the inline style="" attribute on the same element
+function styleObjToBlock(styles: Record<string, any>): string {
+  const lines: string[] = [];
+  for (const [key, val] of Object.entries(styles)) {
+    if (val === undefined || val === "" || STYLE_SKIP.has(key)) continue;
+    const cssKey = key.replace(/([A-Z])/g, (m) => `-${m.toLowerCase()}`);
+    lines.push(`  ${cssKey}: ${val} !important;`);
+  }
+  if (
+    styles.gradientType === "linear" &&
+    styles.gradientStartColor &&
+    styles.gradientEndColor
+  )
+    lines.push(
+      `  background-image: linear-gradient(${styles.gradientAngle ?? 135}deg, ${styles.gradientStartColor}, ${styles.gradientEndColor}) !important;`,
+    );
+  if (styles.lineClamp)
+    lines.push(
+      `  display: -webkit-box !important;`,
+      `  -webkit-line-clamp: ${styles.lineClamp} !important;`,
+      `  -webkit-box-orient: vertical !important;`,
+      `  overflow: hidden !important;`,
+    );
+  return lines.join("\n");
+}
+
+// ─── State CSS collector ──────────────────────────────────────────────────────
+
+function collectStateCSS(
+  el: CanvasElement,
+  components: SavedComponent[],
+  rules: string[],
+) {
+  if (el.savedComponentId) {
+    const comp = components.find((c) => c.id === el.savedComponentId);
+    if (comp) collectStateCSS(comp.element, components, rules);
+    return;
+  }
+  const hasHover = el.hoverStyles && Object.keys(el.hoverStyles).length > 0;
+  const hasActive = el.activeStyles && Object.keys(el.activeStyles).length > 0;
+  const hasFocus =
+    (el as any).focusStyles && Object.keys((el as any).focusStyles).length > 0;
+
+  // Emit transition on base selector so it animates into hover/active/focus
+  if ((hasHover || hasActive || hasFocus) && el.styles.transition) {
+    rules.push(
+      `[data-bid="${el.id}"] { transition: ${el.styles.transition}; }`,
+    );
+  }
+  if (hasHover) {
+    const block = styleObjToBlock(el.hoverStyles as Record<string, any>);
+    if (block) rules.push(`[data-bid="${el.id}"]:hover {\n${block}\n}`);
+  }
+  if (hasActive) {
+    const block = styleObjToBlock(el.activeStyles as Record<string, any>);
+    if (block) rules.push(`[data-bid="${el.id}"]:active {\n${block}\n}`);
+  }
+  if (hasFocus) {
+    const block = styleObjToBlock(
+      (el as any).focusStyles as Record<string, any>,
+    );
+    if (block) rules.push(`[data-bid="${el.id}"]:focus {\n${block}\n}`);
+  }
+  for (const child of el.children || [])
+    collectStateCSS(child, components, rules);
+}
+
+// ─── HTML generator ───────────────────────────────────────────────────────────
 
 function elementToHTML(
   el: CanvasElement,
   allPages: Page[],
   components: SavedComponent[],
 ): string {
-  // If this is a saved-component instance, inline it from the saved component
   if (el.savedComponentId) {
     const comp = components.find((c) => c.id === el.savedComponentId);
     if (comp) return elementToHTML(comp.element, allPages, components);
   }
 
-  const css = styleToCSS(el.styles);
+  const css = styleToCSS(el.styles as Record<string, any>);
   const style = css ? ` style="${css}"` : "";
+  const bid = ` data-bid="${el.id}"`;
   const kids = (el.children || [])
     .map((c) => elementToHTML(c, allPages, components))
     .join("\n");
 
-  // Rewrite hrefs so internal links navigate within the preview
   const rewriteHref = (href: string) => {
     if (!href || href === "#") return "javascript:void(0)";
     if (href.startsWith("http") || href.startsWith("//")) return href;
-    // Internal path — will be intercepted by the iframe's click handler
     return href;
   };
 
   switch (el.type) {
     case "heading":
-      return `<h1${style}>${el.content || "Heading"}</h1>`;
+      return `<h1${bid}${style}>${el.content || "Heading"}</h1>`;
     case "heading2":
-      return `<h2${style}>${el.content || "Heading"}</h2>`;
+      return `<h2${bid}${style}>${el.content || "Heading"}</h2>`;
     case "heading3":
-      return `<h3${style}>${el.content || "Heading"}</h3>`;
+      return `<h3${bid}${style}>${el.content || "Heading"}</h3>`;
     case "text":
     case "paragraph":
-      return `<p${style}>${el.content || ""}</p>`;
+      return `<p${bid}${style}>${el.content || ""}</p>`;
     case "span":
-      return `<span${style}>${el.content || ""}</span>`;
+      return `<span${bid}${style}>${el.content || ""}</span>`;
     case "badge":
-      return `<span${style}>${el.content || "Badge"}</span>`;
+      return `<span${bid}${style}>${el.content || "Badge"}</span>`;
     case "blockquote":
-      return `<blockquote${style}>${el.content || ""}</blockquote>`;
+      return `<blockquote${bid}${style}>${el.content || ""}</blockquote>`;
     case "code":
-      return `<code${style}>${el.content || ""}</code>`;
+      return `<code${bid}${style}>${el.content || ""}</code>`;
     case "pre":
-      return `<pre${style}>${el.content || ""}</pre>`;
+      return `<pre${bid}${style}>${el.content || ""}</pre>`;
     case "icon":
-      return `<span${style} aria-hidden="true">${el.content || "★"}</span>`;
+      return `<span${bid}${style} aria-hidden="true">${el.content || "★"}</span>`;
     case "divider":
-      return `<hr${style} />`;
+      return `<hr${bid}${style} />`;
     case "spacer":
-      return `<div${style} aria-hidden="true"></div>`;
+      return `<div${bid}${style} aria-hidden="true"></div>`;
     case "image":
-      return `<img src="${el.src || ""}" alt="${el.alt || ""}"${style} />`;
+      return `<img${bid} src="${el.src || ""}" alt="${el.alt || ""}"${style} />`;
     case "iframe":
-      return `<iframe src="${el.src || ""}"${style}></iframe>`;
+      return `<iframe${bid} src="${el.src || ""}"${style}></iframe>`;
     case "input":
-      return `<input type="text" placeholder="${el.placeholder || ""}"${style} />`;
+      return `<input${bid} type="text" placeholder="${el.placeholder || ""}"${style} />`;
     case "textarea":
-      return `<textarea placeholder="${el.placeholder || ""}"${style}></textarea>`;
+      return `<textarea${bid} placeholder="${el.placeholder || ""}"${style}></textarea>`;
     case "footer":
-      return `<footer${style}>${el.content || ""}</footer>`;
-
+      return `<footer${bid}${style}>${el.content || ""}</footer>`;
     case "link": {
       const href = rewriteHref(el.href || "#");
       const target = el.target === "_blank" ? ` target="_blank"` : "";
-      return `<a href="${href}"${target}${style}>${el.content || "Link"}</a>`;
+      return `<a${bid} href="${href}"${target}${style}>${el.content || "Link"}</a>`;
     }
     case "button": {
       const href = rewriteHref(el.href || "#");
       const target = el.target === "_blank" ? ` target="_blank"` : "";
-      return `<a href="${href}"${target}${style}>${el.content || "Button"}</a>`;
+      return `<a${bid} href="${href}"${target}${style}>${el.content || "Button"}</a>`;
     }
     case "video":
-      return `<video${style}${el.controls ? " controls" : ""}${el.autoPlay ? " autoplay" : ""}${el.muted ? " muted" : ""}${el.loop ? " loop" : ""}${el.videoPoster ? ` poster="${el.videoPoster}"` : ""}><source src="${el.videoSrc || ""}" /></video>`;
+      return `<video${bid}${style}${el.controls ? " controls" : ""}${el.autoPlay ? " autoplay" : ""}${el.muted ? " muted" : ""}${el.loop ? " loop" : ""}${el.videoPoster ? ` poster="${el.videoPoster}"` : ""}><source src="${el.videoSrc || ""}" /></video>`;
     case "audio":
-      return `<audio${style}${el.controls ? " controls" : ""}${el.autoPlay ? " autoplay" : ""}${el.loop ? " loop" : ""}><source src="${el.videoSrc || ""}" /></audio>`;
+      return `<audio${bid}${style}${el.controls ? " controls" : ""}${el.autoPlay ? " autoplay" : ""}${el.loop ? " loop" : ""}><source src="${el.videoSrc || ""}" /></audio>`;
     case "select": {
       const opts = (el.selectOptions || [])
         .map((o) => `<option value="${o}">${o}</option>`)
         .join("");
-      return `<select${style}>${opts}</select>`;
+      return `<select${bid}${style}>${opts}</select>`;
     }
     case "checkbox":
-      return `<label${style}><input type="checkbox"${el.checked ? " checked" : ""} /> <span>${el.content || "Label"}</span></label>`;
+      return `<label${bid}${style}><input type="checkbox"${el.checked ? " checked" : ""} /> <span>${el.content || "Label"}</span></label>`;
     case "radio":
-      return `<label${style}><input type="radio" /> <span>${el.content || "Option"}</span></label>`;
+      return `<label${bid}${style}><input type="radio" /> <span>${el.content || "Option"}</span></label>`;
     case "list": {
       const items = (el.listItems || []).map((i) => `<li>${i}</li>`).join("");
-      return `<ul${style}>${items}</ul>`;
+      return `<ul${bid}${style}>${items}</ul>`;
     }
     case "orderedList": {
       const items = (el.listItems || []).map((i) => `<li>${i}</li>`).join("");
-      return `<ol${style}>${items}</ol>`;
+      return `<ol${bid}${style}>${items}</ol>`;
     }
     case "navbar": {
       const navKids = (el.children || [])
@@ -164,7 +218,7 @@ function elementToHTML(
       const brand = el.content
         ? `<span style="font-weight:700;font-size:20px">${el.content}</span>`
         : "";
-      return `<nav${style}>${brand}${navKids}</nav>`;
+      return `<nav${bid}${style}>${brand}${navKids}</nav>`;
     }
     case "table": {
       const td = (el as any).tableData || { headers: [], rows: [] };
@@ -175,7 +229,7 @@ function elementToHTML(
             `<tr>${row.map((c: string) => `<td>${c}</td>`).join("")}</tr>`,
         )
         .join("");
-      return `<table${style}><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+      return `<table${bid}${style}><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
     }
     case "div":
     case "section":
@@ -186,10 +240,10 @@ function elementToHTML(
     case "nav":
     case "form": {
       const tag = (el as any).htmlTag || el.type;
-      return `<${tag}${style}>${kids}</${tag}>`;
+      return `<${tag}${bid}${style}>${kids}</${tag}>`;
     }
     default:
-      return `<div${style}>${el.content || kids || ""}</div>`;
+      return `<div${bid}${style}>${el.content || kids || ""}</div>`;
   }
 }
 
@@ -197,11 +251,14 @@ function buildPageHTML(
   page: Page,
   allPages: Page[],
   components: SavedComponent[],
-  slug: string,
 ): string {
   const body = page.elements
     .map((el) => elementToHTML(el, allPages, components))
     .join("\n");
+
+  const stateRules: string[] = [];
+  for (const el of page.elements) collectStateCSS(el, components, stateRules);
+  const stateCSS = stateRules.length ? stateRules.join("\n\n") : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -215,12 +272,12 @@ function buildPageHTML(
     img { max-width: 100%; display: block; }
     a { text-decoration: none; }
     input, textarea, select, button { font: inherit; }
+    ${stateCSS}
   </style>
 </head>
 <body>
 ${body}
 <script>
-  // Intercept internal link clicks and notify the parent frame
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a');
     if (!a) return;
@@ -235,18 +292,12 @@ ${body}
 </html>`;
 }
 
-// ─── Viewport sizes ───────────────────────────────────────────────────────────
+// ─── Viewports ────────────────────────────────────────────────────────────────
 
 const VIEWPORTS = [
-  {
-    id: "desktop",
-    label: "Desktop",
-    icon: Monitor,
-    width: "100%",
-    frameW: null,
-  },
-  { id: "tablet", label: "Tablet", icon: Tablet, width: 768, frameW: 768 },
-  { id: "mobile", label: "Mobile", icon: Smartphone, width: 390, frameW: 390 },
+  { id: "desktop", label: "Desktop", icon: Monitor, frameW: null },
+  { id: "tablet", label: "Tablet", icon: Tablet, frameW: 768 },
+  { id: "mobile", label: "Mobile", icon: Smartphone, frameW: 390 },
 ] as const;
 
 type ViewportId = (typeof VIEWPORTS)[number]["id"];
@@ -277,23 +328,17 @@ export default function PreviewModal({
   const currentPage = pages.find((p) => p.slug === currentSlug) ?? pages[0];
   const currentViewport = VIEWPORTS.find((v) => v.id === viewport)!;
 
-  // Build srcdoc for current page
   const srcdoc = currentPage
-    ? buildPageHTML(currentPage, pages, components, currentPage.slug)
+    ? buildPageHTML(currentPage, pages, components)
     : "<html><body><p style='padding:40px;font-family:sans-serif;color:#888'>Page not found</p></body></html>";
 
-  // Navigate to a slug (push history)
   const navigateTo = useCallback(
     (slug: string) => {
       const page = pages.find((p) => p.slug === slug);
       if (!page) return;
-      // setLoading will be triggered by the iframe's onLoad once srcdoc swaps
       setCurrentSlug(slug);
       setLoading(true);
-      setHistory((prev) => {
-        const trimmed = prev.slice(0, historyIdx + 1);
-        return [...trimmed, slug];
-      });
+      setHistory((prev) => [...prev.slice(0, historyIdx + 1), slug]);
       setHistoryIdx((i) => i + 1);
     },
     [pages, historyIdx],
@@ -306,7 +351,6 @@ export default function PreviewModal({
     setCurrentSlug(history[newIdx]);
     setLoading(true);
   };
-
   const goForward = () => {
     if (historyIdx >= history.length - 1) return;
     const newIdx = historyIdx + 1;
@@ -314,7 +358,6 @@ export default function PreviewModal({
     setCurrentSlug(history[newIdx]);
     setLoading(true);
   };
-
   const refresh = () => {
     setLoading(true);
     if (iframeRef.current) {
@@ -325,19 +368,14 @@ export default function PreviewModal({
     }
   };
 
-  // Listen to navigate messages from iframe
   useEffect(() => {
     const handler = (e: MessageEvent) => {
-      if (!e.data || typeof e.data !== "object") return;
-      if (e.data.type === "navigate" && e.data.slug) {
-        navigateTo(e.data.slug);
-      }
+      if (e.data?.type === "navigate" && e.data.slug) navigateTo(e.data.slug);
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, [navigateTo]);
 
-  // Keyboard: Escape closes
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -364,10 +402,9 @@ export default function PreviewModal({
           background: "#0e0e0e",
         }}
       >
-        {/* Close */}
         <button
           onClick={onClose}
-          className="flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+          className="flex items-center justify-center shrink-0 cursor-pointer"
           style={{
             width: 28,
             height: 28,
@@ -376,63 +413,40 @@ export default function PreviewModal({
             border: "none",
             color: "rgba(255,255,255,0.45)",
           }}
-          title="Close preview (Esc)"
+          title="Close (Esc)"
         >
           <X size={13} />
         </button>
-
         <div className="flex items-center gap-1">
-          <button
-            onClick={goBack}
-            disabled={!canBack}
-            className="flex items-center justify-center cursor-pointer transition-all"
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              border: "none",
-              background: "transparent",
-              color: canBack
-                ? "rgba(255,255,255,0.5)"
-                : "rgba(255,255,255,0.15)",
-            }}
-          >
-            <ArrowLeft size={14} />
-          </button>
-          <button
-            onClick={goForward}
-            disabled={!canForward}
-            className="flex items-center justify-center cursor-pointer transition-all"
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              border: "none",
-              background: "transparent",
-              color: canForward
-                ? "rgba(255,255,255,0.5)"
-                : "rgba(255,255,255,0.15)",
-            }}
-          >
-            <ArrowRight size={14} />
-          </button>
-          <button
-            onClick={refresh}
-            className="flex items-center justify-center cursor-pointer transition-all"
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              border: "none",
-              background: "transparent",
-              color: "rgba(255,255,255,0.4)",
-            }}
-          >
-            <RefreshCw size={13} />
-          </button>
+          {[
+            { fn: goBack, disabled: !canBack, icon: <ArrowLeft size={14} /> },
+            {
+              fn: goForward,
+              disabled: !canForward,
+              icon: <ArrowRight size={14} />,
+            },
+            { fn: refresh, disabled: false, icon: <RefreshCw size={13} /> },
+          ].map((btn, i) => (
+            <button
+              key={i}
+              onClick={btn.fn}
+              disabled={btn.disabled}
+              className="flex items-center justify-center cursor-pointer"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                border: "none",
+                background: "transparent",
+                color: btn.disabled
+                  ? "rgba(255,255,255,0.15)"
+                  : "rgba(255,255,255,0.5)",
+              }}
+            >
+              {btn.icon}
+            </button>
+          ))}
         </div>
-
-        {/* Address bar */}
         <div
           className="flex items-center gap-2 flex-1"
           style={{
@@ -462,7 +476,6 @@ export default function PreviewModal({
             localhost:3000{currentSlug === "/" ? "" : currentSlug}
           </span>
         </div>
-
         <div
           className="flex items-center gap-1 overflow-x-auto"
           style={{ maxWidth: 280, scrollbarWidth: "none" }}
@@ -471,11 +484,9 @@ export default function PreviewModal({
             <button
               key={page.id}
               onClick={() => {
-                if (currentSlug !== page.slug) {
-                  navigateTo(page.slug);
-                }
+                if (currentSlug !== page.slug) navigateTo(page.slug);
               }}
-              className="flex items-center shrink-0 cursor-pointer transition-all"
+              className="flex items-center shrink-0 cursor-pointer"
               style={{
                 padding: "4px 10px",
                 borderRadius: 6,
@@ -491,14 +502,12 @@ export default function PreviewModal({
                     ? "rgba(255,255,255,0.8)"
                     : "rgba(255,255,255,0.3)",
                 whiteSpace: "nowrap",
-                cursor: currentSlug === page.slug ? "default" : "pointer",
               }}
             >
               {page.name}
             </button>
           ))}
         </div>
-
         <div
           className="flex items-center shrink-0"
           style={{
@@ -513,7 +522,7 @@ export default function PreviewModal({
               key={id}
               onClick={() => setViewport(id)}
               title={label}
-              className="flex items-center justify-center cursor-pointer transition-all"
+              className="flex items-center justify-center cursor-pointer"
               style={{
                 width: 28,
                 height: 24,
@@ -558,7 +567,6 @@ export default function PreviewModal({
             position: "relative",
           }}
         >
-          {/* Loading shimmer */}
           {loading && (
             <div
               style={{
@@ -587,7 +595,6 @@ export default function PreviewModal({
               </div>
             </div>
           )}
-
           <iframe
             key={currentSlug}
             ref={iframeRef}
@@ -605,12 +612,6 @@ export default function PreviewModal({
           />
         </div>
       </div>
-
-      {/* Animations */}
-      <style>{`
-        @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
-        @keyframes bounce { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-6px) } }
-      `}</style>
     </div>
   );
 }

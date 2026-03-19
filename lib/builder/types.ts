@@ -170,6 +170,8 @@ export interface CanvasElement {
   href?: string;
   target?: "_blank" | "_self";
   placeholder?: string;
+  hoverStyles?: Partial<StyleProps>;
+  activeStyles?: Partial<StyleProps>;
   iconName?: string;
   videoSrc?: string;
   iframeSrc?: string;
@@ -213,11 +215,15 @@ export interface SavedComponent {
   createdAt: number;
 }
 
+export type SelectedState = "focus" | "hover" | "active" | "default";
+
 export interface BuilderState {
   pages: Page[];
   activePageId: string;
   designTokens: DesignTokens;
   selectedElementId: string | null;
+  stylingState: SelectedState;
+  selectedElementIds: string[];
   hoveredElementId: string | null;
   editingElementId: string | null;
   past: HistoryEntry[];
@@ -228,17 +234,23 @@ export interface BuilderState {
   deletePage: (id: string) => void;
   setActivePage: (id: string) => void;
   renamePage: (id: string, name: string) => void;
-
   addElement: (
     element: Omit<CanvasElement, "id">,
     parentId?: string,
     targetIndex?: number,
   ) => void;
-  updateElement: (id: string, updates: Partial<CanvasElement>) => void;
   deleteElement: (id: string) => void;
   selectElement: (id: string | null) => void;
   setHoveredElement: (id: string | null) => void;
   setEditingElement: (id: string | null) => void;
+  setStylingState: (state: SelectedState) => void;
+  toggleSelectElement: (id: string) => void;
+  clearSelection: () => void;
+  updateElement: (
+    id: string,
+    updates: Partial<CanvasElement>,
+    state?: SelectedState,
+  ) => void;
   moveElement: (id: string, direction: "up" | "down") => void;
   reorderElement: (
     sourceId: string,

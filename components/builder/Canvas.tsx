@@ -12,7 +12,7 @@ import { ElementType, CanvasElement } from "@/lib/builder/types";
 import { defaultElement } from "./Sidebar";
 import * as LucideIcons from "lucide-react";
 
-const { ArrowUp, ArrowDown, Trash2, Copy, Plus, Bookmark } = LucideIcons;
+const { ArrowUp, ArrowDown, Trash2, Copy, Plus, Bookmark, X } = LucideIcons;
 
 // ─── Text-editable element types ─────────────────────────────────────────────
 
@@ -32,6 +32,107 @@ const TEXT_TYPES = new Set([
   "footer",
   "navbar",
 ]);
+
+// ─── Hover/Active CSS injection ───────────────────────────────────────────────
+
+const STYLE_SKIP = new Set([
+  "gradientType",
+  "gradientAngle",
+  "gradientStartColor",
+  "gradientEndColor",
+  "lineClamp",
+  "tableStripe",
+  "tableHeaderBackground",
+  "tableCellPadding",
+]);
+
+function styleObjToDeclarations(styles: Record<string, any>): string {
+  const lines: string[] = [];
+  for (const [key, val] of Object.entries(styles)) {
+    if (val === undefined || val === "" || STYLE_SKIP.has(key)) continue;
+    const cssKey = key.replace(/([A-Z])/g, (m) => `-${m.toLowerCase()}`);
+    lines.push(`  ${cssKey}: ${val} !important;`);
+  }
+  if (
+    styles.gradientType === "linear" &&
+    styles.gradientStartColor &&
+    styles.gradientEndColor
+  ) {
+    lines.push(
+      `  background-image: linear-gradient(${styles.gradientAngle ?? 135}deg, ${styles.gradientStartColor}, ${styles.gradientEndColor}) !important;`,
+    );
+  }
+  if (styles.lineClamp) {
+    lines.push(
+      `  display: -webkit-box !important;`,
+      `  -webkit-line-clamp: ${styles.lineClamp} !important;`,
+      `  -webkit-box-orient: vertical !important;`,
+      `  overflow: hidden !important;`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function buildStateCSS(elements: CanvasElement[]): string {
+  const rules: string[] = [];
+  function walk(el: CanvasElement) {
+    const hasHover = el.hoverStyles && Object.keys(el.hoverStyles).length > 0;
+    const hasActive =
+      el.activeStyles && Object.keys(el.activeStyles).length > 0;
+    const hasFocus =
+      (el as any).focusStyles &&
+      Object.keys((el as any).focusStyles).length > 0;
+
+    // Emit transition on base selector so hover/active/focus animate smoothly.
+    // Inline style="" transitions don't animate against stylesheet pseudo-class rules.
+    if ((hasHover || hasActive || hasFocus) && el.styles.transition) {
+      rules.push(
+        `[data-bid="${el.id}"] {\n  transition: ${el.styles.transition};\n}`,
+      );
+    }
+    if (hasHover) {
+      const decl = styleObjToDeclarations(
+        el.hoverStyles as Record<string, any>,
+      );
+      if (decl) rules.push(`[data-bid="${el.id}"]:hover {\n${decl}\n}`);
+    }
+    if (hasActive) {
+      const decl = styleObjToDeclarations(
+        el.activeStyles as Record<string, any>,
+      );
+      if (decl) rules.push(`[data-bid="${el.id}"]:active {\n${decl}\n}`);
+    }
+    if (hasFocus) {
+      const decl = styleObjToDeclarations(
+        (el as any).focusStyles as Record<string, any>,
+      );
+      if (decl) rules.push(`[data-bid="${el.id}"]:focus {\n${decl}\n}`);
+    }
+    for (const child of el.children || []) walk(child);
+  }
+  for (const el of elements) walk(el);
+  return rules.join("\n\n");
+}
+
+function HoverActiveStyleSheet() {
+  const pages = useBuilderStore((s) => s.pages);
+  const activePageId = useBuilderStore((s) => s.activePageId);
+  const activePage = pages.find((p) => p.id === activePageId);
+
+  useEffect(() => {
+    const css = activePage ? buildStateCSS(activePage.elements) : "";
+    const id = "builder-hover-active-styles";
+    let tag = document.getElementById(id) as HTMLStyleElement | null;
+    if (!tag) {
+      tag = document.createElement("style");
+      tag.id = id;
+      document.head.appendChild(tag);
+    }
+    tag.textContent = css;
+  });
+
+  return null;
+}
 
 // ─── Context Menu ─────────────────────────────────────────────────────────────
 
@@ -267,7 +368,7 @@ function InlineEditor({
     e.stopPropagation();
   };
 
-  if (isMultiline) {
+  if (isMultiline)
     return (
       <textarea
         ref={ref as any}
@@ -278,7 +379,6 @@ function InlineEditor({
         onClick={(e) => e.stopPropagation()}
       />
     );
-  }
   return (
     <input
       ref={ref as any}
@@ -343,12 +443,12 @@ function RenderElement({
 }: RenderElementProps) {
   const {
     selectedElementId,
+    selectedElementIds,
     hoveredElementId,
     selectElement,
+    toggleSelectElement,
     setHoveredElement,
     updateElement,
-    pages,
-    setActivePage,
   } = useBuilderStore();
 
   const isResizing = useRef(false);
@@ -386,8 +486,11 @@ function RenderElement({
     [el.id, el.styles, updateElement],
   );
 
+  // ── Selection state ───────────────────────────────────────────────────────
   const isSelected = selectedElementId === el.id;
-  const isHovered = hoveredElementId === el.id && !isSelected;
+  const isMultiSelected = (selectedElementIds ?? []).includes(el.id);
+  const isAnySelected = isSelected || isMultiSelected;
+  const isHovered = hoveredElementId === el.id && !isAnySelected;
   const isEditing = editingId === el.id;
   const isTarget = dropTargetId === el.id && draggingId !== el.id;
   const isHorizontal =
@@ -406,6 +509,10 @@ function RenderElement({
   ].includes(el.type);
   const isTextType = TEXT_TYPES.has(el.type);
 
+  // ── Visibility / lock ────────────────────────────────────────────────────
+  const isHidden = !!el.metadata?.isHidden;
+  const isLocked = !!el.metadata?.isLocked;
+
   const {
     gradientType,
     gradientAngle,
@@ -417,22 +524,40 @@ function RenderElement({
 
   const wrapperStyle: React.CSSProperties = {
     position: (restStyles.position as any) || "relative",
-    cursor: isEditing ? "text" : "grab",
-    opacity: draggingId === el.id ? 0.3 : (restStyles.opacity ?? 1),
+    cursor: isEditing ? "text" : isLocked ? "not-allowed" : "grab",
+    // Hidden elements show at 30% opacity in editor so you can still see/select them
+    opacity:
+      draggingId === el.id ? 0.3 : isHidden ? 0.25 : (restStyles.opacity ?? 1),
     overflow: (restStyles.overflow as any) || undefined,
     boxSizing: "border-box",
     ...restStyles,
+    // Blue dotted = primary selection, purple dotted = part of multi-selection
+    // Orange dotted = locked
     outline: isEditing
       ? "2px solid #0d99ff"
       : isSelected
-        ? "2px dotted #0d99ff"
-        : isHovered
-          ? "2px dotted rgba(13,153,255,0.8)"
-          : isTarget && dropPos === "inside"
-            ? "2px dashed #0d99ff"
-            : "none",
+        ? isLocked
+          ? "2px dotted #f59e0b"
+          : "2px dotted #0d99ff"
+        : isMultiSelected
+          ? "2px dotted #a78bfa"
+          : isHovered
+            ? isLocked
+              ? "2px dotted rgba(245,158,11,0.6)"
+              : "2px dotted rgba(13,153,255,0.8)"
+            : isTarget && dropPos === "inside"
+              ? "2px dashed #0d99ff"
+              : "none",
     outlineOffset: "0px",
-    zIndex: isSelected ? 2 : isHovered ? 1 : (restStyles.zIndex as any),
+    zIndex: isAnySelected ? 2 : isHovered ? 1 : (restStyles.zIndex as any),
+    // Strikethrough-style diagonal pattern overlay for hidden elements
+    ...(isHidden
+      ? {
+          backgroundImage:
+            "repeating-linear-gradient(45deg, rgba(148,163,184,0.08) 0px, rgba(148,163,184,0.08) 1px, transparent 1px, transparent 8px)",
+          backgroundBlendMode: "overlay",
+        }
+      : {}),
     ...(gradientType === "linear" && gradientStartColor && gradientEndColor
       ? {
           backgroundImage: `linear-gradient(${gradientAngle ?? 135}deg, ${gradientStartColor}, ${gradientEndColor})`,
@@ -458,27 +583,31 @@ function RenderElement({
   const htmlTag = (el as any).htmlTag || TAG_MAP[el.type] || "div";
 
   const wrapperProps: any = {
+    "data-bid": el.id,
     style: wrapperStyle,
     onClick: (e: React.MouseEvent) => {
       e.stopPropagation();
       if (isEditing) return;
-      selectElement(el.id);
+      if (e.shiftKey) {
+        toggleSelectElement(el.id);
+      } else {
+        selectElement(el.id);
+      }
     },
     onDoubleClick: (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (isLocked) return; // locked elements can't be edited
       selectElement(el.id);
-      if (isTextType) {
-        onStartEdit(el.id);
-      }
+      if (isTextType) onStartEdit(el.id);
     },
     onMouseEnter: (e: React.MouseEvent) => {
       e.stopPropagation();
       setHoveredElement(el.id);
     },
     onMouseLeave: () => setHoveredElement(null),
-    draggable: !isEditing,
+    draggable: !isEditing && !isLocked, // locked elements can't be dragged
     onDragStart: (e: React.DragEvent) => {
-      if (isEditing) {
+      if (isEditing || isLocked) {
         e.preventDefault();
         return;
       }
@@ -503,11 +632,9 @@ function RenderElement({
   };
 
   const renderContent = () => {
-    // Inline editor overlay
-    if (isEditing && isTextType) {
+    if (isEditing && isTextType)
       return (
         <>
-          {/* Show original content dimmed behind the editor */}
           <span style={{ pointerEvents: "none", opacity: 0.2 }}>
             {el.content || ""}
           </span>
@@ -518,7 +645,6 @@ function RenderElement({
           />
         </>
       );
-    }
 
     if (el.type === "image")
       return (
@@ -826,7 +952,6 @@ function RenderElement({
         </blockquote>
       );
 
-    // Container / text elements
     return (
       <>
         {el.content ? (
@@ -878,7 +1003,6 @@ function RenderElement({
     htmlTag,
     wrapperProps,
     <>
-      {/* Drop indicator line */}
       {isTarget && dropPos !== "inside" && (
         <div
           className="absolute bg-blue-500 pointer-events-none rounded-full"
@@ -899,10 +1023,9 @@ function RenderElement({
           }}
         />
       )}
-
-      {/* Resize handle */}
       {isSelected && !isEditing && (
         <div
+          data-resize-handle="true"
           onMouseDown={onResizeStart}
           style={{
             position: "absolute",
@@ -924,7 +1047,6 @@ function RenderElement({
           </svg>
         </div>
       )}
-
       {isSelected && !isEditing && isTextType && (
         <div
           style={{
@@ -944,9 +1066,109 @@ function RenderElement({
           {el.type}
         </div>
       )}
-
+      {/* Lock badge */}
+      {isLocked && isAnySelected && (
+        <div
+          style={{
+            position: "absolute",
+            top: -20,
+            right: 0,
+            fontSize: 9,
+            color: "#f59e0b",
+            background: "rgba(245,158,11,0.12)",
+            padding: "2px 6px",
+            borderRadius: 3,
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+          }}
+        >
+          🔒 Locked · Press L to unlock
+        </div>
+      )}
+      {/* Hidden badge */}
+      {isHidden && isAnySelected && (
+        <div
+          style={{
+            position: "absolute",
+            top: -20,
+            left: isLocked ? undefined : 0,
+            right: isLocked ? 80 : undefined,
+            fontSize: 9,
+            color: "#94a3b8",
+            background: "rgba(148,163,184,0.1)",
+            padding: "2px 6px",
+            borderRadius: 3,
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+          }}
+        >
+          👁 Hidden · Press H to show
+        </div>
+      )}
       {renderContent()}
     </>,
+  );
+}
+
+// ─── Clipboard (sessionStorage so HMR doesn't wipe it) ───────────────────────
+
+const CLIPBOARD_KEY = "builder-clipboard";
+
+function readClipboard(): CanvasElement[] {
+  try {
+    const raw = sessionStorage.getItem(CLIPBOARD_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeClipboard(els: CanvasElement[]) {
+  try {
+    sessionStorage.setItem(CLIPBOARD_KEY, JSON.stringify(els));
+  } catch {}
+}
+
+function generateId() {
+  return Math.random().toString(36).substr(2, 9);
+}
+
+function deepCloneWithNewIds(el: CanvasElement): CanvasElement {
+  return {
+    ...el,
+    id: `el-${generateId()}`,
+    children: el.children?.map(deepCloneWithNewIds),
+  };
+}
+
+// ─── Keyboard shortcut toast ──────────────────────────────────────────────────
+
+function ShortcutToast({
+  message,
+  visible,
+}: {
+  message: string;
+  visible: boolean;
+}) {
+  return (
+    <div
+      className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/70 border border-white/10 pointer-events-none transition-all duration-200"
+      style={{
+        background: "#1a1a1a",
+        opacity: visible ? 1 : 0,
+        transform: `translateX(-50%) translateY(${visible ? 0 : 6}px)`,
+      }}
+    >
+      {message}
+    </div>
   );
 }
 
@@ -957,24 +1179,28 @@ export default function Canvas() {
     getActivePage,
     addElement,
     selectElement,
+    toggleSelectElement,
+    clearSelection,
     reorderElement,
     insertComponent,
     deleteElement,
+    duplicateElement,
     updateElement,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
     selectedElementId,
+    selectedElementIds,
     editingElementId,
     setEditingElement,
   } = useBuilderStore();
   const page = getActivePage();
 
-  // Inline editing — use store so other panels (e.g. DesignTokensPanel) can read it
   const handleStartEdit = useCallback(
-    (id: string) => {
-      setEditingElement(id);
-    },
+    (id: string) => setEditingElement(id),
     [setEditingElement],
   );
-
   const handleCommitEdit = useCallback(
     (id: string, val: string) => {
       updateElement(id, { content: val });
@@ -982,41 +1208,274 @@ export default function Canvas() {
     },
     [updateElement, setEditingElement],
   );
+  const handleCancelEdit = useCallback(
+    () => setEditingElement(null),
+    [setEditingElement],
+  );
 
-  const handleCancelEdit = useCallback(() => {
-    setEditingElement(null);
-  }, [setEditingElement]);
+  // Toast state
+  const [toast, setToast] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keyboard shortcuts
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setToastVisible(true);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastVisible(false), 1800);
+  }, []);
+
+  // Collect all currently selected element IDs (single + multi)
+  const getAllSelected = useCallback(() => {
+    const ids = [
+      ...(selectedElementIds ?? []),
+      ...(selectedElementId &&
+      !(selectedElementIds ?? []).includes(selectedElementId)
+        ? [selectedElementId]
+        : []),
+    ];
+    return ids;
+  }, [selectedElementId, selectedElementIds]);
+
+  // Find an element in the tree by id
+  const findElement = useCallback(
+    (id: string): CanvasElement | undefined => {
+      const pg = getActivePage();
+      if (!pg) return undefined;
+      const search = (els: CanvasElement[]): CanvasElement | undefined => {
+        for (const el of els) {
+          if (el.id === id) return el;
+          if (el.children) {
+            const f = search(el.children);
+            if (f) return f;
+          }
+        }
+      };
+      return search(pg.elements);
+    },
+    [getActivePage],
+  );
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // Don't fire canvas shortcuts while editing inline
       if (editingElementId) return;
+      const active = document.activeElement;
+      const isTyping =
+        active &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          (active as HTMLElement).isContentEditable);
 
-      if (!selectedElementId) return;
-      if (e.key === "Delete" || e.key === "Backspace") {
-        const active = document.activeElement;
-        const isEditing =
-          active &&
-          (active.tagName === "INPUT" ||
-            active.tagName === "TEXTAREA" ||
-            (active as HTMLElement).isContentEditable);
-        if (!isEditing) {
-          e.preventDefault();
-          deleteElement(selectedElementId);
+      const cmd = e.metaKey || e.ctrlKey;
+      const allSelected = getAllSelected();
+      const hasSel = allSelected.length > 0;
+
+      // ── Delete / Backspace ────────────────────────────────────────────────
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        !isTyping &&
+        hasSel
+      ) {
+        e.preventDefault();
+        allSelected.forEach((id) => deleteElement(id));
+        clearSelection();
+        selectElement(null);
+        showToast(
+          `Deleted ${allSelected.length} element${allSelected.length > 1 ? "s" : ""}`,
+        );
+        return;
+      }
+
+      // ── Escape ────────────────────────────────────────────────────────────
+      if (e.key === "Escape") {
+        if ((selectedElementIds ?? []).length > 0) clearSelection();
+        else selectElement(null);
+        return;
+      }
+
+      if (isTyping) return; // everything below is cmd-key — safe to skip when typing
+
+      // ── Ctrl/Cmd+Z  Undo ──────────────────────────────────────────────────
+      if (cmd && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        if (canUndo()) {
+          undo();
+          showToast("Undo");
         }
+        return;
+      }
+
+      // ── Ctrl/Cmd+Shift+Z  or  Ctrl+Y  Redo ───────────────────────────────
+      if ((cmd && e.shiftKey && e.key === "z") || (cmd && e.key === "y")) {
+        e.preventDefault();
+        if (canRedo()) {
+          redo();
+          showToast("Redo");
+        }
+        return;
+      }
+
+      // ── Ctrl/Cmd+A  Select all top-level ─────────────────────────────────
+      if (cmd && e.key === "a") {
+        e.preventDefault();
+        const pg = getActivePage();
+        if (pg) pg.elements.forEach((el) => toggleSelectElement(el.id));
+        showToast("Selected all");
+        return;
+      }
+
+      // ── Ctrl/Cmd+D  Duplicate ─────────────────────────────────────────────
+      if (cmd && e.key === "d" && hasSel) {
+        e.preventDefault();
+        allSelected.forEach((id) => duplicateElement(id));
+        showToast(
+          `Duplicated ${allSelected.length} element${allSelected.length > 1 ? "s" : ""}`,
+        );
+        return;
+      }
+
+      // ── Ctrl/Cmd+C  Copy ─────────────────────────────────────────────────
+      if (cmd && e.key === "c" && hasSel) {
+        e.preventDefault();
+        const els = allSelected
+          .map(findElement)
+          .filter(Boolean) as CanvasElement[];
+        writeClipboard(els.map(deepCloneWithNewIds));
+        showToast(`Copied ${els.length} element${els.length > 1 ? "s" : ""}`);
+        return;
+      }
+
+      // ── Ctrl/Cmd+X  Cut ──────────────────────────────────────────────────
+      if (cmd && e.key === "x" && hasSel) {
+        e.preventDefault();
+        const els = allSelected
+          .map(findElement)
+          .filter(Boolean) as CanvasElement[];
+        writeClipboard(els.map(deepCloneWithNewIds));
+        allSelected.forEach((id) => deleteElement(id));
+        clearSelection();
+        selectElement(null);
+        showToast(`Cut ${els.length} element${els.length > 1 ? "s" : ""}`);
+        return;
+      }
+
+      // ── Ctrl/Cmd+V  Paste ─────────────────────────────────────────────────
+      if (cmd && e.key === "v") {
+        e.preventDefault();
+        const clip = readClipboard();
+        if (clip.length === 0) {
+          showToast("Nothing to paste");
+          return;
+        }
+        // Clone again so you can paste multiple times with fresh IDs each time
+        const toInsert = clip.map(deepCloneWithNewIds);
+        toInsert.forEach((el) => addElement(el));
+        showToast(
+          `Pasted ${toInsert.length} element${toInsert.length > 1 ? "s" : ""}`,
+        );
+        return;
+      }
+
+      // ── Arrow keys  Nudge position ────────────────────────────────────────
+      // Works when element has position: absolute/fixed/relative/sticky
+      if (
+        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) &&
+        hasSel
+      ) {
+        e.preventDefault();
+        const delta = e.shiftKey ? 10 : 1; // Shift = 10px, plain = 1px
+        const dir = {
+          ArrowUp: ["top", -delta],
+          ArrowDown: ["top", delta],
+          ArrowLeft: ["left", -delta],
+          ArrowRight: ["left", delta],
+        }[e.key]!;
+        allSelected.forEach((id) => {
+          const el = findElement(id);
+          if (!el) return;
+          const pos = el.styles.position || "relative";
+          const current = parseFloat((el.styles as any)[dir[0]] || "0") || 0;
+          updateElement(id, {
+            styles: {
+              ...el.styles,
+              position: pos,
+              [dir[0] as string]: `${current + (dir[1] as number)}px`,
+            },
+          });
+        });
+        return;
+      }
+
+      // ── [ and ]  Move up/down in layer order ──────────────────────────────
+      if ((e.key === "[" || e.key === "]") && hasSel) {
+        e.preventDefault();
+        const dir = e.key === "[" ? "up" : "down";
+        allSelected.forEach((id) => {
+          const store = useBuilderStore.getState();
+          store.moveElement(id, dir);
+        });
+        showToast(e.key === "[" ? "Moved up" : "Moved down");
+        return;
+      }
+
+      // ── H  Toggle hidden ──────────────────────────────────────────────────
+      if (e.key === "h" && hasSel) {
+        e.preventDefault();
+        allSelected.forEach((id) => {
+          const el = findElement(id);
+          if (!el) return;
+          updateElement(id, {
+            metadata: { ...el.metadata, isHidden: !el.metadata?.isHidden },
+          });
+        });
+        showToast("Toggled visibility");
+        return;
+      }
+
+      // ── L  Toggle locked ──────────────────────────────────────────────────
+      if (e.key === "l" && hasSel) {
+        e.preventDefault();
+        allSelected.forEach((id) => {
+          const el = findElement(id);
+          if (!el) return;
+          updateElement(id, {
+            metadata: { ...el.metadata, isLocked: !el.metadata?.isLocked },
+          });
+        });
+        showToast("Toggled lock");
+        return;
       }
     };
+
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [selectedElementId, deleteElement, editingElementId]);
+  }, [
+    selectedElementId,
+    selectedElementIds,
+    editingElementId,
+    getAllSelected,
+    findElement,
+    deleteElement,
+    clearSelection,
+    selectElement,
+    duplicateElement,
+    addElement,
+    updateElement,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    toggleSelectElement,
+    getActivePage,
+    showToast,
+  ]);
 
-  // Click outside canvas → deselect and cancel edit
   const handleCanvasClick = useCallback(() => {
     selectElement(null);
+    clearSelection();
     setEditingElement(null);
     setContextMenu(null);
-  }, [selectElement, setEditingElement]);
+  }, [selectElement, clearSelection, setEditingElement]);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -1037,6 +1496,7 @@ export default function Canvas() {
 
   if (!page) return null;
   const hasElements = page.elements.length > 0;
+  const multiCount = (selectedElementIds ?? []).length;
 
   const sharedProps = {
     draggingId,
@@ -1086,13 +1546,11 @@ export default function Canvas() {
           : isAfter
             ? targetIndex + 1
             : targetIndex;
-
       if (compId) insertComponent(compId, finalParentId, finalIndex);
       else if (newType)
         addElement(defaultElement(newType), finalParentId, finalIndex);
       else if (sourceId && sourceId !== targetId)
         reorderElement(sourceId, finalParentId, finalIndex);
-
       setDropTargetId(null);
       setDraggingId(null);
     },
@@ -1104,8 +1562,57 @@ export default function Canvas() {
       style={{ padding: "40px 40px 80px" }}
       onClick={handleCanvasClick}
     >
+      <HoverActiveStyleSheet />
+
       {contextMenu && (
         <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+      )}
+
+      {/* Shortcut toast */}
+      <ShortcutToast message={toast} visible={toastVisible} />
+
+      {/* ── Multi-select action bar ── */}
+      {multiCount > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 shadow-2xl select-none"
+          style={{ background: "#1a1a1a" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Count badge */}
+          <div className="flex items-center gap-1.5 mr-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+            <span className="text-[11px] text-white/50 font-medium">
+              {multiCount} selected
+            </span>
+          </div>
+          <div className="w-px h-4 bg-white/10" />
+          <button
+            onClick={() => {
+              (selectedElementIds ?? []).forEach((id) => duplicateElement(id));
+              clearSelection();
+            }}
+            className="text-[11px] text-white/60 hover:text-white px-2 py-1 rounded hover:bg-white/8 transition-all cursor-pointer"
+          >
+            Duplicate all
+          </button>
+          <button
+            onClick={() => {
+              (selectedElementIds ?? []).forEach((id) => deleteElement(id));
+              clearSelection();
+            }}
+            className="text-[11px] text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-500/10 transition-all cursor-pointer"
+          >
+            Delete all
+          </button>
+          <div className="w-px h-4 bg-white/10" />
+          <button
+            onClick={() => clearSelection()}
+            title="Deselect (Esc)"
+            className="text-white/30 hover:text-white/60 p-1 rounded hover:bg-white/5 transition-all cursor-pointer"
+          >
+            <X size={12} />
+          </button>
+        </div>
       )}
 
       <div

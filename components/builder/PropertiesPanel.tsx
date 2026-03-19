@@ -8,9 +8,6 @@ import { StyleProps } from "@/lib/builder/types";
 import {
   Link as LinkIcon,
   Unlink,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   MousePointer2,
   Layers,
   ChevronDown,
@@ -28,7 +25,6 @@ import {
   AlignCenterVertical,
   AlignEndVertical,
   StretchVertical,
-  StretchHorizontal,
   Baseline,
   LayoutGrid,
 } from "lucide-react";
@@ -52,7 +48,6 @@ const GOOGLE_FONTS_URL =
   "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;700&family=Bricolage+Grotesque:wght@400;600;700&family=Fraunces:ital,wght@0,400;0,700;1,400&display=swap";
 
 let fontDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
 function loadCustomGoogleFont(name: string, onReady: (name: string) => void) {
   if (fontDebounceTimer) clearTimeout(fontDebounceTimer);
   fontDebounceTimer = setTimeout(() => {
@@ -61,8 +56,7 @@ function loadCustomGoogleFont(name: string, onReady: (name: string) => void) {
     if (!clean) return;
     const family = clean.replace(/\s+/g, "+");
     const linkId = `gfont-${family}`;
-    const existing = document.getElementById(linkId);
-    if (existing) {
+    if (document.getElementById(linkId)) {
       onReady(clean);
       return;
     }
@@ -83,7 +77,6 @@ function Label({ children }: { children: React.ReactNode }) {
     </label>
   );
 }
-
 function Input({
   value,
   onChange,
@@ -105,7 +98,6 @@ function Input({
     />
   );
 }
-
 function Textarea({
   value,
   onChange,
@@ -127,7 +119,6 @@ function Textarea({
     />
   );
 }
-
 function MediaPicker({
   value,
   onChange,
@@ -140,26 +131,17 @@ function MediaPicker({
   label?: string;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.size > 10 * 1024 * 1024) {
-      alert(
-        "File is too large. Please keep it under 10MB to avoid performance issues.",
-      );
+      alert("File is too large. Please keep it under 10MB.");
       return;
     }
-
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      onChange(base64);
-    };
+    reader.onload = (event) => onChange(event.target?.result as string);
     reader.readAsDataURL(file);
   };
-
   return (
     <div className="space-y-2">
       {value && value.startsWith("data:") ? (
@@ -208,7 +190,6 @@ function MediaPicker({
     </div>
   );
 }
-
 function Select({
   value,
   onChange,
@@ -224,13 +205,10 @@ function Select({
   const menuRef = useRef<HTMLDivElement>(null);
   const chevronRef = useRef<SVGSVGElement>(null);
   const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
     setMounted(true);
   }, []);
-
   const selected = options.find((o) => o.value === (value || "")) || options[0];
-
   const openMenu = () => {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
@@ -251,9 +229,8 @@ function Select({
         transformOrigin: "50% 50%",
       });
   };
-
   const closeMenu = () => {
-    if (menuRef.current) {
+    if (menuRef.current)
       gsap.to(menuRef.current, {
         opacity: 0,
         y: -4,
@@ -262,9 +239,7 @@ function Select({
         ease: "power2.in",
         onComplete: () => setOpen(false),
       });
-    } else {
-      setOpen(false);
-    }
+    else setOpen(false);
     if (chevronRef.current)
       gsap.to(chevronRef.current, {
         rotation: 0,
@@ -273,23 +248,19 @@ function Select({
         transformOrigin: "50% 50%",
       });
   };
-
   const toggle = () => (open ? closeMenu() : openMenu());
   const pick = (val: string) => {
     onChange(val);
     closeMenu();
   };
-
   useEffect(() => {
-    if (open && menuRef.current) {
+    if (open && menuRef.current)
       gsap.fromTo(
         menuRef.current,
         { opacity: 0, y: -5, scaleY: 0.9, transformOrigin: "top center" },
         { opacity: 1, y: 0, scaleY: 1, duration: 0.2, ease: "power3.out" },
       );
-    }
   }, [open]);
-
   useEffect(() => {
     const handle = (e: MouseEvent) => {
       if (
@@ -303,7 +274,6 @@ function Select({
     if (open) document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
-
   const menu =
     open && mounted ? (
       <div
@@ -349,7 +319,6 @@ function Select({
         </div>
       </div>
     ) : null;
-
   return (
     <div className="relative">
       <button
@@ -371,7 +340,6 @@ function Select({
     </div>
   );
 }
-
 function ColorInput({
   value,
   onChange,
@@ -397,7 +365,6 @@ function ColorInput({
     </div>
   );
 }
-
 function Row({
   children,
   cols = 2,
@@ -414,7 +381,6 @@ function Row({
     </div>
   );
 }
-
 function Field({
   label,
   children,
@@ -429,7 +395,6 @@ function Field({
     </div>
   );
 }
-
 function ToggleButton({
   active,
   onClick,
@@ -446,21 +411,12 @@ function ToggleButton({
       type="button"
       title={title}
       onClick={onClick}
-      className={`flex-1 py-1.5 rounded flex items-center justify-center transition-all cursor-pointer border ${
-        active
-          ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
-          : "bg-white/3 border-white/5 text-white/30 hover:text-white/60 hover:bg-white/6"
-      }`}
+      className={`flex-1 py-1.5 rounded flex items-center justify-center transition-all cursor-pointer border ${active ? "bg-blue-500/20 border-blue-500/40 text-blue-300" : "bg-white/3 border-white/5 text-white/30 hover:text-white/60 hover:bg-white/6"}`}
     >
       {children}
     </button>
   );
 }
-
-function Divider() {
-  return <div className="h-px bg-white/5 -mx-3" />;
-}
-
 function Section({
   title,
   children,
@@ -476,7 +432,6 @@ function Section({
   const contentRef = useRef<HTMLDivElement>(null);
   const chevronRef = useRef<SVGSVGElement>(null);
   const isFirstRender = useRef(true);
-
   useEffect(() => {
     if (!collapsible || !contentRef.current) return;
     if (isFirstRender.current) {
@@ -514,7 +469,6 @@ function Section({
       });
     }
   }, [open, collapsible, defaultOpen]);
-
   useEffect(() => {
     if (!chevronRef.current) return;
     gsap.to(chevronRef.current, {
@@ -524,7 +478,6 @@ function Section({
       transformOrigin: "50% 50%",
     });
   }, [open]);
-
   return (
     <div>
       <button
@@ -532,13 +485,7 @@ function Section({
         className={`w-full flex items-center justify-between py-2 group ${collapsible ? "cursor-pointer" : "cursor-default"}`}
       >
         <span
-          className={`text-[9.5px] uppercase tracking-widest font-semibold transition-colors duration-150 ${
-            collapsible
-              ? open
-                ? "text-white/50 group-hover:text-white/70"
-                : "text-white/30 group-hover:text-white/50"
-              : "text-white/35"
-          }`}
+          className={`text-[9.5px] uppercase tracking-widest font-semibold transition-colors duration-150 ${collapsible ? (open ? "text-white/50 group-hover:text-white/70" : "text-white/30 group-hover:text-white/50") : "text-white/35"}`}
         >
           {title}
         </span>
@@ -564,7 +511,6 @@ function Section({
     </div>
   );
 }
-
 function ElementHeader({
   el,
   onRename,
@@ -575,26 +521,22 @@ function ElementHeader({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-
   const displayName =
     el.metadata?.name ||
     el.type
       .replace(/([A-Z])/g, " $1")
       .replace(/(\d)/g, " $1")
       .trim();
-
   const startEdit = () => {
     setDraft(el.metadata?.name || "");
     setEditing(true);
     setTimeout(() => inputRef.current?.select(), 0);
   };
-
   const commit = () => {
     const trimmed = draft.trim();
     if (trimmed) onRename(trimmed);
     setEditing(false);
   };
-
   return (
     <div className="h-11 px-3 border-b border-[#383838] flex items-center justify-between bg-[#2c2c2c] shrink-0">
       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -630,12 +572,38 @@ function ElementHeader({
   );
 }
 
+const STYLING_STATES = ["default", "hover", "active", "focus"] as const;
+type StylingStateTab = (typeof STYLING_STATES)[number];
+function StateSelectorBar({
+  current,
+  onChange,
+}: {
+  current: StylingStateTab;
+  onChange: (s: StylingStateTab) => void;
+}) {
+  return (
+    <div className="flex gap-1 px-3 py-2 border-b border-[#383838] bg-[#272727] shrink-0">
+      {STYLING_STATES.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onChange(s)}
+          className={`flex-1 py-1 rounded text-[10px] font-semibold capitalize tracking-wide transition-all cursor-pointer ${current === s ? "bg-blue-600 text-white shadow-sm shadow-blue-900/40" : "text-white/30 hover:text-white/60 hover:bg-white/5"}`}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Panel ───────────────────────────────────────────────────────────────
 export default function PropertiesPanel() {
-  const { getSelectedElement, updateElement } = useBuilderStore();
+  const { getSelectedElement, updateElement, stylingState, setStylingState } =
+    useBuilderStore();
   const el = getSelectedElement();
   const panelRef = useRef<HTMLDivElement>(null);
   const prevElId = useRef<string | null>(null);
-
   const [padLinked, setPadLinked] = useState(true);
   const [marLinked, setMarLinked] = useState(true);
   const [borderLinked, setBorderLinked] = useState(true);
@@ -678,41 +646,38 @@ export default function PropertiesPanel() {
       </div>
     );
 
-  const update = (key: string, value: any) => {
+  const update = (key: string, value: any) =>
     updateElement(el.id, { [key]: value } as any);
+
+  // Read value from the correct style bucket for the active tab
+  const gsv = (key: keyof StyleProps): any => {
+    if (stylingState === "hover") return (el.hoverStyles as any)?.[key];
+    if (stylingState === "active") return (el.activeStyles as any)?.[key];
+    if (stylingState === "focus") return (el as any).focusStyles?.[key];
+    return (el.styles as any)[key];
   };
 
+  // Write only the single changed key into the correct bucket.
+  // NEVER spread el.styles here — the store merges via { ...el.hoverStyles, ...updates.styles }
+  // so spreading would flood the hover/active bucket with all base styles.
   const updateStyle = (key: keyof StyleProps, value: any) => {
     let val: any = value;
-
-    if (key === "backgroundImage" && value && !value.includes("url(")) {
+    if (key === "backgroundImage" && value && !value.includes("url("))
       val = `url("${value}")`;
-    } else if (key === "opacity") {
+    else if (key === "opacity")
       val = value === "" ? undefined : Number(value) / 100;
-    } else if (
-      key === "zIndex" ||
-      key === "flexGrow" ||
-      key === "flexShrink" ||
-      key === "gradientAngle"
-    ) {
+    else if (
+      ["zIndex", "flexGrow", "flexShrink", "gradientAngle"].includes(key)
+    )
       val = value === "" ? undefined : Number(value);
-    }
-
-    updateElement(el.id, {
-      styles: {
-        ...el.styles,
-        [key]: val,
-      },
-    });
+    updateElement(el.id, { styles: { [key]: val } }, stylingState);
   };
 
   const toggleStyle = (
     key: keyof StyleProps,
     value: string,
     fallback?: string,
-  ) => {
-    updateStyle(key, el.styles[key] === value ? fallback : value);
-  };
+  ) => updateStyle(key, gsv(key) === value ? fallback : value);
 
   const updateAllSides = (
     type: "padding" | "margin" | "border",
@@ -740,12 +705,7 @@ export default function PropertiesPanel() {
       updates[`borderBottom${suffix}`] = val;
       updates[`borderLeft${suffix}`] = val;
     }
-    updateElement(el.id, {
-      styles: {
-        ...el.styles,
-        ...updates,
-      },
-    });
+    updateElement(el.id, { styles: updates }, stylingState);
   };
 
   const hasText = [
@@ -788,6 +748,10 @@ export default function PropertiesPanel() {
           updateElement(el.id, { metadata: { ...el.metadata, name } })
         }
       />
+      <StateSelectorBar
+        current={stylingState as StylingStateTab}
+        onChange={(s) => setStylingState(s)}
+      />
 
       <div ref={panelRef} className="flex-1 overflow-y-auto px-3">
         {el.type === "image" && (
@@ -816,7 +780,7 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Object Fit">
               <Select
-                value={el.styles.objectFit}
+                value={gsv("objectFit")}
                 onChange={(v) => updateStyle("objectFit", v as any)}
                 options={[
                   { value: "cover", label: "Cover" },
@@ -828,7 +792,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
         {el.type === "video" && (
           <Section title="Video">
             <Field label="Video URL">
@@ -885,7 +848,6 @@ export default function PropertiesPanel() {
             </div>
           </Section>
         )}
-
         {[
           "heading",
           "heading2",
@@ -907,7 +869,6 @@ export default function PropertiesPanel() {
             />
           </Section>
         )}
-
         {el.type === "link" && (
           <Section title="Link">
             <Field label="Label">
@@ -936,7 +897,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
         {el.type === "button" && (
           <Section title="Button">
             <Field label="Label">
@@ -965,7 +925,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
         {el.type === "navbar" && (
           <Section title="Navbar">
             <Field label="Brand Name">
@@ -975,9 +934,64 @@ export default function PropertiesPanel() {
                 placeholder="Brand"
               />
             </Field>
+            <div>
+              <Label>Sticky Preset</Label>
+              <button
+                onClick={() =>
+                  updateElement(el.id, {
+                    styles: {
+                      ...el.styles,
+                      position: "sticky",
+                      top: "0px",
+                      zIndex: 50,
+                      backdropFilter: el.styles.backdropFilter || "blur(12px)",
+                    },
+                  })
+                }
+                className="w-full py-1.5 text-[10px] font-semibold bg-white/5 hover:bg-blue-500/15 hover:text-blue-300 border border-white/8 hover:border-blue-500/30 rounded transition-all cursor-pointer text-white/40"
+              >
+                Make Sticky
+              </button>
+            </div>
           </Section>
         )}
-
+        {el.type === "form" && (
+          <Section title="Form">
+            <Field label="Action URL">
+              <Input
+                value={(el as any).formAction || ""}
+                onChange={(v) => update("formAction", v)}
+                placeholder="/api/submit"
+              />
+            </Field>
+            <Field label="Method">
+              <Select
+                value={(el as any).formMethod || "post"}
+                onChange={(v) => update("formMethod", v)}
+                options={[
+                  { value: "post", label: "POST" },
+                  { value: "get", label: "GET" },
+                ]}
+              />
+            </Field>
+            <Field label="Encoding">
+              <Select
+                value={
+                  (el as any).formEnctype || "application/x-www-form-urlencoded"
+                }
+                onChange={(v) => update("formEnctype", v)}
+                options={[
+                  {
+                    value: "application/x-www-form-urlencoded",
+                    label: "Default",
+                  },
+                  { value: "multipart/form-data", label: "Multipart (files)" },
+                  { value: "text/plain", label: "Plain text" },
+                ]}
+              />
+            </Field>
+          </Section>
+        )}
         {el.type === "footer" && (
           <Section title="Footer">
             <Field label="Content">
@@ -990,7 +1004,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
         {(el.type === "list" || el.type === "orderedList") && (
           <Section title={el.type === "orderedList" ? "Ordered List" : "List"}>
             <Field label="Items (one per line)">
@@ -1004,7 +1017,7 @@ export default function PropertiesPanel() {
             <Field label="Style">
               <Select
                 value={
-                  el.styles.listStyleType ||
+                  gsv("listStyleType") ||
                   (el.type === "orderedList" ? "decimal" : "disc")
                 }
                 onChange={(v) => updateStyle("listStyleType", v as any)}
@@ -1019,7 +1032,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
         {el.type === "input" && (
           <Section title="Input">
             <Field label="Placeholder">
@@ -1029,9 +1041,31 @@ export default function PropertiesPanel() {
                 placeholder="Enter value..."
               />
             </Field>
+            <Field label="Field Name">
+              <Input
+                value={(el as any).fieldName || ""}
+                onChange={(v) => update("fieldName", v)}
+                placeholder="email, name, phone…"
+              />
+            </Field>
+            <Field label="Input Type">
+              <Select
+                value={(el as any).inputType || "text"}
+                onChange={(v) => update("inputType", v)}
+                options={[
+                  { value: "text", label: "Text" },
+                  { value: "email", label: "Email" },
+                  { value: "password", label: "Password" },
+                  { value: "number", label: "Number" },
+                  { value: "tel", label: "Tel" },
+                  { value: "url", label: "URL" },
+                  { value: "date", label: "Date" },
+                  { value: "search", label: "Search" },
+                ]}
+              />
+            </Field>
           </Section>
         )}
-
         {el.type === "textarea" && (
           <Section title="Textarea">
             <Field label="Placeholder">
@@ -1041,9 +1075,15 @@ export default function PropertiesPanel() {
                 placeholder="Enter text..."
               />
             </Field>
+            <Field label="Field Name">
+              <Input
+                value={(el as any).fieldName || ""}
+                onChange={(v) => update("fieldName", v)}
+                placeholder="message, bio…"
+              />
+            </Field>
           </Section>
         )}
-
         {el.type === "icon" && (
           <Section title="Icon">
             <Field label="Icon Name (Lucide)">
@@ -1055,7 +1095,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
         {el.type === "select" && (
           <Section title="Select">
             <Field label="Options (one per line)">
@@ -1068,7 +1107,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
         {el.type === "checkbox" && (
           <Section title="Checkbox">
             <Field label="Label">
@@ -1076,6 +1114,13 @@ export default function PropertiesPanel() {
                 value={el.content || ""}
                 onChange={(v) => update("content", v)}
                 placeholder="I agree to the terms"
+              />
+            </Field>
+            <Field label="Field Name">
+              <Input
+                value={(el as any).fieldName || ""}
+                onChange={(v) => update("fieldName", v)}
+                placeholder="agree, subscribe…"
               />
             </Field>
             <div className="flex gap-1">
@@ -1089,7 +1134,6 @@ export default function PropertiesPanel() {
             </div>
           </Section>
         )}
-
         {el.type === "radio" && (
           <Section title="Radio">
             <Field label="Label">
@@ -1099,9 +1143,15 @@ export default function PropertiesPanel() {
                 placeholder="Option"
               />
             </Field>
+            <Field label="Group Name">
+              <Input
+                value={(el as any).fieldName || ""}
+                onChange={(v) => update("fieldName", v)}
+                placeholder="plan, gender…"
+              />
+            </Field>
           </Section>
         )}
-
         {el.type === "table" && (
           <Section title="Table">
             {(() => {
@@ -1124,19 +1174,19 @@ export default function PropertiesPanel() {
                       <Label>Zebra Stripes</Label>
                       <button
                         onClick={() =>
-                          updateStyle("tableStripe", !el.styles.tableStripe)
+                          updateStyle("tableStripe", !gsv("tableStripe"))
                         }
-                        className={`w-8 h-4 rounded-full transition-colors relative ${el.styles.tableStripe ? "bg-blue-500" : "bg-white/10"}`}
+                        className={`w-8 h-4 rounded-full transition-colors relative ${gsv("tableStripe") ? "bg-blue-500" : "bg-white/10"}`}
                       >
                         <div
-                          className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${el.styles.tableStripe ? "left-4.5" : "left-0.5"}`}
+                          className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${gsv("tableStripe") ? "left-4.5" : "left-0.5"}`}
                         />
                       </button>
                     </div>
                     <Row>
                       <Field label="Header Bg">
                         <Input
-                          value={el.styles.tableHeaderBackground || "#f9fafb"}
+                          value={gsv("tableHeaderBackground") || "#f9fafb"}
                           onChange={(v) =>
                             updateStyle("tableHeaderBackground", v)
                           }
@@ -1144,13 +1194,12 @@ export default function PropertiesPanel() {
                       </Field>
                       <Field label="Padding">
                         <Input
-                          value={el.styles.tableCellPadding || "6px 12px"}
+                          value={gsv("tableCellPadding") || "6px 12px"}
                           onChange={(v) => updateStyle("tableCellPadding", v)}
                         />
                       </Field>
                     </Row>
                   </div>
-
                   <div className="flex items-center justify-between">
                     <Label>Columns: {td.headers.length}</Label>
                     <div className="flex gap-1">
@@ -1253,7 +1302,7 @@ export default function PropertiesPanel() {
                               );
                               setTd({ ...td, rows: nr });
                             }}
-                            placeholder={`Cell`}
+                            placeholder="Cell"
                           />
                         ))}
                       </div>
@@ -1264,7 +1313,6 @@ export default function PropertiesPanel() {
             })()}
           </Section>
         )}
-
         {el.type === "iframe" && (
           <Section title="iFrame">
             <Field label="URL">
@@ -1276,7 +1324,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
         {el.type === "audio" && (
           <Section title="Audio">
             <Field label="Audio URL">
@@ -1319,225 +1366,56 @@ export default function PropertiesPanel() {
             </div>
           </Section>
         )}
-
-        {hasText && (
-          <Section title="Typography">
-            <Row>
-              <Field label="Size">
-                <Input
-                  value={el.styles.fontSize}
-                  onChange={(v) => updateStyle("fontSize", v)}
-                  placeholder="16px"
-                />
-              </Field>
-              <Field label="Weight">
-                <Select
-                  value={el.styles.fontWeight}
-                  onChange={(v) => updateStyle("fontWeight", v)}
-                  options={[
-                    { value: "300", label: "Light" },
-                    { value: "400", label: "Regular" },
-                    { value: "500", label: "Medium" },
-                    { value: "600", label: "Semibold" },
-                    { value: "700", label: "Bold" },
-                    { value: "800", label: "Extrabold" },
-                  ]}
-                />
-              </Field>
-            </Row>
-            <div className="flex gap-1">
-              <ToggleButton
-                active={el.styles.fontStyle === "italic"}
-                onClick={() => toggleStyle("fontStyle", "italic", "normal")}
-                title="Italic"
-              >
-                <Italic size={11} />
-              </ToggleButton>
-              <ToggleButton
-                active={el.styles.textDecoration === "underline"}
-                onClick={() =>
-                  toggleStyle("textDecoration", "underline", "none")
-                }
-                title="Underline"
-              >
-                <Underline size={11} />
-              </ToggleButton>
-              <ToggleButton
-                active={el.styles.textDecoration === "line-through"}
-                onClick={() =>
-                  toggleStyle("textDecoration", "line-through", "none")
-                }
-                title="Strikethrough"
-              >
-                <Strikethrough size={11} />
-              </ToggleButton>
-            </div>
-            <Row>
-              <Field label="Align">
-                <Select
-                  value={el.styles.textAlign}
-                  onChange={(v) => updateStyle("textAlign", v as any)}
-                  options={[
-                    { value: "left", label: "Left" },
-                    { value: "center", label: "Center" },
-                    { value: "right", label: "Right" },
-                    { value: "justify", label: "Justify" },
-                  ]}
-                />
-              </Field>
-              <Field label="Transform">
-                <Select
-                  value={el.styles.textTransform}
-                  onChange={(v) => updateStyle("textTransform", v as any)}
-                  options={[
-                    { value: "none", label: "None" },
-                    { value: "uppercase", label: "ABC" },
-                    { value: "lowercase", label: "abc" },
-                    { value: "capitalize", label: "Abc" },
-                  ]}
-                />
-              </Field>
-            </Row>
-            <Row>
-              <Field label="Line Height">
-                <Input
-                  value={el.styles.lineHeight}
-                  onChange={(v) => updateStyle("lineHeight", v)}
-                  placeholder="1.5"
-                />
-              </Field>
-              <Field label="Spacing">
-                <Input
-                  value={el.styles.letterSpacing}
-                  onChange={(v) => updateStyle("letterSpacing", v)}
-                  placeholder="0px"
-                />
-              </Field>
-            </Row>
-            <Row>
-              <Field label="White Space">
-                <Select
-                  value={el.styles.whiteSpace}
-                  onChange={(v) => updateStyle("whiteSpace", v as any)}
-                  options={[
-                    { value: "normal", label: "Normal" },
-                    { value: "nowrap", label: "No Wrap" },
-                    { value: "pre", label: "Pre" },
-                    { value: "pre-wrap", label: "Pre Wrap" },
-                    { value: "pre-line", label: "Pre Line" },
-                  ]}
-                />
-              </Field>
-              <Field label="Truncate">
-                <Select
-                  value={el.styles.textOverflow}
-                  onChange={(v) => updateStyle("textOverflow", v as any)}
-                  options={[
-                    { value: "clip", label: "Clip" },
-                    { value: "ellipsis", label: "Ellipsis" },
-                  ]}
-                />
-              </Field>
-            </Row>
-            <Field label="Max Lines">
-              <Input
-                value={el.styles.lineClamp}
-                onChange={(v) => updateStyle("lineClamp", v)}
-                placeholder="2"
-                type="number"
-              />
-            </Field>
-            <Field label="Color">
-              <ColorInput
-                value={el.styles.color || "#000000"}
-                onChange={(v) => updateStyle("color", v)}
-              />
-            </Field>
-            <Field label="Font Family">
-              <div className="space-y-2">
-                <Select
-                  value={el.styles.fontFamily || "inherit"}
-                  onChange={(v) => updateStyle("fontFamily", v)}
-                  options={FONT_FAMILIES}
-                />
-                <Input
-                  value={
-                    FONT_FAMILIES.some((f) => f.value === el.styles.fontFamily)
-                      ? ""
-                      : el.styles.fontFamily || ""
-                  }
-                  onChange={(v) => {
-                    const name = v.trim();
-                    if (!name) {
-                      updateStyle("fontFamily", "");
-                      return;
-                    }
-                    loadCustomGoogleFont(name, (loaded) =>
-                      updateStyle("fontFamily", loaded),
-                    );
-                  }}
-                  placeholder="Custom font e.g. Poppins"
-                />
-                <p className="text-[9px] text-white/20 leading-relaxed">
-                  Exports via{" "}
-                  <span className="text-white/35 font-mono">
-                    next/font/google
-                  </span>
-                </p>
-              </div>
-            </Field>
-          </Section>
-        )}
-
         {el.type === "divider" && (
           <Section title="Divider">
             <Field label="Color">
               <ColorInput
-                value={el.styles.borderColor || "#e5e7eb"}
+                value={gsv("borderColor") || "#e5e7eb"}
                 onChange={(v) => {
-                  const width = el.styles.borderWidth || "1px";
-                  const style = el.styles.borderStyle || "solid";
-                  updateElement(el.id, {
-                    styles: {
-                      ...el.styles,
-                      borderColor: v,
-                      borderTop: `${width} ${style} ${v}`,
-                    },
-                  });
+                  const w = gsv("borderWidth") || "1px";
+                  const s = gsv("borderStyle") || "solid";
+                  updateElement(
+                    el.id,
+                    { styles: { borderColor: v, borderTop: `${w} ${s} ${v}` } },
+                    stylingState,
+                  );
                 }}
               />
             </Field>
             <Row>
               <Field label="Thickness">
                 <Input
-                  value={el.styles.borderWidth || "1px"}
+                  value={gsv("borderWidth") || "1px"}
                   onChange={(v) => {
-                    const color = el.styles.borderColor || "#e5e7eb";
-                    const style = el.styles.borderStyle || "solid";
-                    updateElement(el.id, {
-                      styles: {
-                        ...el.styles,
-                        borderWidth: v,
-                        borderTop: `${v} ${style} ${color}`,
+                    const c = gsv("borderColor") || "#e5e7eb";
+                    const s = gsv("borderStyle") || "solid";
+                    updateElement(
+                      el.id,
+                      {
+                        styles: { borderWidth: v, borderTop: `${v} ${s} ${c}` },
                       },
-                    });
+                      stylingState,
+                    );
                   }}
                   placeholder="1px"
                 />
               </Field>
               <Field label="Style">
                 <Select
-                  value={el.styles.borderStyle || "solid"}
+                  value={gsv("borderStyle") || "solid"}
                   onChange={(v) => {
-                    const color = el.styles.borderColor || "#e5e7eb";
-                    const width = el.styles.borderWidth || "1px";
-                    updateElement(el.id, {
-                      styles: {
-                        ...el.styles,
-                        borderStyle: v as any,
-                        borderTop: `${width} ${v} ${color}`,
+                    const c = gsv("borderColor") || "#e5e7eb";
+                    const w = gsv("borderWidth") || "1px";
+                    updateElement(
+                      el.id,
+                      {
+                        styles: {
+                          borderStyle: v as any,
+                          borderTop: `${w} ${v} ${c}`,
+                        },
                       },
-                    });
+                      stylingState,
+                    );
                   }}
                   options={[
                     { value: "solid", label: "Solid" },
@@ -1550,12 +1428,11 @@ export default function PropertiesPanel() {
             </Row>
           </Section>
         )}
-
         {el.type === "spacer" && (
           <Section title="Spacer">
             <Field label="Height">
               <Input
-                value={el.styles.height || "48px"}
+                value={gsv("height") || "48px"}
                 onChange={(v) => updateStyle("height", v)}
                 placeholder="48px"
               />
@@ -1567,14 +1444,14 @@ export default function PropertiesPanel() {
           <Row>
             <Field label="Width">
               <Input
-                value={el.styles.width}
+                value={gsv("width")}
                 onChange={(v) => updateStyle("width", v)}
                 placeholder="auto"
               />
             </Field>
             <Field label="Height">
               <Input
-                value={el.styles.height}
+                value={gsv("height")}
                 onChange={(v) => updateStyle("height", v)}
                 placeholder="auto"
               />
@@ -1583,14 +1460,14 @@ export default function PropertiesPanel() {
           <Row>
             <Field label="Min W">
               <Input
-                value={el.styles.minWidth}
+                value={gsv("minWidth")}
                 onChange={(v) => updateStyle("minWidth", v)}
                 placeholder="—"
               />
             </Field>
             <Field label="Max W">
               <Input
-                value={el.styles.maxWidth}
+                value={gsv("maxWidth")}
                 onChange={(v) => updateStyle("maxWidth", v)}
                 placeholder="—"
               />
@@ -1599,14 +1476,14 @@ export default function PropertiesPanel() {
           <Row>
             <Field label="Min H">
               <Input
-                value={el.styles.minHeight}
+                value={gsv("minHeight")}
                 onChange={(v) => updateStyle("minHeight", v)}
                 placeholder="—"
               />
             </Field>
             <Field label="Max H">
               <Input
-                value={el.styles.maxHeight}
+                value={gsv("maxHeight")}
                 onChange={(v) => updateStyle("maxHeight", v)}
                 placeholder="—"
               />
@@ -1614,7 +1491,7 @@ export default function PropertiesPanel() {
           </Row>
           <Field label="Aspect Ratio">
             <Input
-              value={el.styles.aspectRatio}
+              value={gsv("aspectRatio")}
               onChange={(v) => updateStyle("aspectRatio", v)}
               placeholder="16 / 9"
             />
@@ -1635,29 +1512,29 @@ export default function PropertiesPanel() {
             </div>
             {padLinked ? (
               <Input
-                value={el.styles.padding}
+                value={gsv("padding")}
                 onChange={(v) => updateAllSides("padding", v)}
                 placeholder="All sides"
               />
             ) : (
               <Row>
                 <Input
-                  value={el.styles.paddingTop}
+                  value={gsv("paddingTop")}
                   onChange={(v) => updateStyle("paddingTop", v)}
                   placeholder="Top"
                 />
                 <Input
-                  value={el.styles.paddingRight}
+                  value={gsv("paddingRight")}
                   onChange={(v) => updateStyle("paddingRight", v)}
                   placeholder="Right"
                 />
                 <Input
-                  value={el.styles.paddingBottom}
+                  value={gsv("paddingBottom")}
                   onChange={(v) => updateStyle("paddingBottom", v)}
                   placeholder="Bottom"
                 />
                 <Input
-                  value={el.styles.paddingLeft}
+                  value={gsv("paddingLeft")}
                   onChange={(v) => updateStyle("paddingLeft", v)}
                   placeholder="Left"
                 />
@@ -1680,29 +1557,29 @@ export default function PropertiesPanel() {
             </div>
             {marLinked ? (
               <Input
-                value={el.styles.margin}
+                value={gsv("margin")}
                 onChange={(v) => updateAllSides("margin", v)}
                 placeholder="All sides"
               />
             ) : (
               <Row>
                 <Input
-                  value={el.styles.marginTop}
+                  value={gsv("marginTop")}
                   onChange={(v) => updateStyle("marginTop", v)}
                   placeholder="Top"
                 />
                 <Input
-                  value={el.styles.marginRight}
+                  value={gsv("marginRight")}
                   onChange={(v) => updateStyle("marginRight", v)}
                   placeholder="Right"
                 />
                 <Input
-                  value={el.styles.marginBottom}
+                  value={gsv("marginBottom")}
                   onChange={(v) => updateStyle("marginBottom", v)}
                   placeholder="Bottom"
                 />
                 <Input
-                  value={el.styles.marginLeft}
+                  value={gsv("marginLeft")}
                   onChange={(v) => updateStyle("marginLeft", v)}
                   placeholder="Left"
                 />
@@ -1715,15 +1592,13 @@ export default function PropertiesPanel() {
           title="Layout"
           collapsible
           defaultOpen={
-            el.styles.display === "flex" ||
-            el.styles.display === "grid" ||
-            isLayout
+            gsv("display") === "flex" || gsv("display") === "grid" || isLayout
           }
         >
           <Row>
             <Field label="Display">
               <Select
-                value={el.styles.display}
+                value={gsv("display")}
                 onChange={(v) => updateStyle("display", v)}
                 options={[
                   { value: "block", label: "Block" },
@@ -1737,7 +1612,7 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Overflow">
               <Select
-                value={el.styles.overflow}
+                value={gsv("overflow")}
                 onChange={(v) => updateStyle("overflow", v as any)}
                 options={[
                   { value: "visible", label: "Visible" },
@@ -1748,13 +1623,12 @@ export default function PropertiesPanel() {
               />
             </Field>
           </Row>
-          {(el.styles.display === "flex" ||
-            el.styles.display === "inline-flex") && (
+          {(gsv("display") === "flex" || gsv("display") === "inline-flex") && (
             <div className="space-y-2.5 bg-white/3 rounded-lg p-2.5 border border-white/5">
               <Row>
                 <Field label="Direction">
                   <Select
-                    value={el.styles.flexDirection}
+                    value={gsv("flexDirection")}
                     onChange={(v) => updateStyle("flexDirection", v as any)}
                     options={[
                       { value: "row", label: "Row" },
@@ -1766,7 +1640,7 @@ export default function PropertiesPanel() {
                 </Field>
                 <Field label="Wrap">
                   <Select
-                    value={el.styles.flexWrap}
+                    value={gsv("flexWrap")}
                     onChange={(v) => updateStyle("flexWrap", v as any)}
                     options={[
                       { value: "nowrap", label: "No Wrap" },
@@ -1814,7 +1688,7 @@ export default function PropertiesPanel() {
                       type="button"
                       title={opt.title}
                       onClick={() => updateStyle("justifyContent", opt.id)}
-                      className={`h-7 rounded flex items-center justify-center transition-all cursor-pointer ${el.styles.justifyContent === opt.id ? "bg-[#333] text-white shadow-sm" : "text-white/20 hover:text-white/40 hover:bg-white/5"}`}
+                      className={`h-7 rounded flex items-center justify-center transition-all cursor-pointer ${gsv("justifyContent") === opt.id ? "bg-[#333] text-white shadow-sm" : "text-white/20 hover:text-white/40 hover:bg-white/5"}`}
                     >
                       {opt.icon}
                     </button>
@@ -1855,7 +1729,7 @@ export default function PropertiesPanel() {
                       type="button"
                       title={opt.title}
                       onClick={() => updateStyle("alignItems", opt.id)}
-                      className={`h-7 rounded flex items-center justify-center transition-all cursor-pointer ${el.styles.alignItems === opt.id ? "bg-[#333] text-white shadow-sm" : "text-white/20 hover:text-white/40 hover:bg-white/5"}`}
+                      className={`h-7 rounded flex items-center justify-center transition-all cursor-pointer ${gsv("alignItems") === opt.id ? "bg-[#333] text-white shadow-sm" : "text-white/20 hover:text-white/40 hover:bg-white/5"}`}
                     >
                       {opt.icon}
                     </button>
@@ -1865,14 +1739,14 @@ export default function PropertiesPanel() {
               <Row>
                 <Field label="Gap">
                   <Input
-                    value={el.styles.gap}
+                    value={gsv("gap")}
                     onChange={(v) => updateStyle("gap", v)}
                     placeholder="12px"
                   />
                 </Field>
                 <Field label="Grow">
                   <Input
-                    value={el.styles.flexGrow}
+                    value={gsv("flexGrow")}
                     onChange={(v) => updateStyle("flexGrow", v)}
                     placeholder="0"
                   />
@@ -1880,25 +1754,18 @@ export default function PropertiesPanel() {
               </Row>
               <Field label="Shrink">
                 <Input
-                  value={el.styles.flexShrink}
+                  value={gsv("flexShrink")}
                   onChange={(v) => updateStyle("flexShrink", v)}
                   placeholder="1"
                 />
               </Field>
             </div>
           )}
-          {el.styles.display === "grid" && (
+          {gsv("display") === "grid" && (
             <div className="space-y-2.5 bg-white/3 rounded-lg p-2.5 border border-white/5">
-              <Field label="Gap">
-                <Input
-                  value={el.styles.gap}
-                  onChange={(v) => updateStyle("gap", v)}
-                  placeholder="12px"
-                />
-              </Field>
               <Field label="Columns">
                 <Input
-                  value={el.styles.gridTemplateColumns}
+                  value={gsv("gridTemplateColumns")}
                   onChange={(v) => updateStyle("gridTemplateColumns", v)}
                   placeholder="1fr 1fr 1fr"
                 />
@@ -1919,7 +1786,7 @@ export default function PropertiesPanel() {
                   <button
                     key={v}
                     onClick={() => updateStyle("gridTemplateColumns", v)}
-                    className={`text-[9px] px-1.5 py-0.5 rounded border cursor-pointer transition-all ${el.styles.gridTemplateColumns === v ? "bg-blue-500/20 border-blue-500/40 text-blue-300" : "bg-white/3 border-white/8 text-white/30 hover:text-white/70 hover:bg-white/8"}`}
+                    className={`text-[9px] px-1.5 py-0.5 rounded border cursor-pointer transition-all ${gsv("gridTemplateColumns") === v ? "bg-blue-500/20 border-blue-500/40 text-blue-300" : "bg-white/3 border-white/8 text-white/30 hover:text-white/70 hover:bg-white/8"}`}
                   >
                     {v}
                   </button>
@@ -1927,7 +1794,7 @@ export default function PropertiesPanel() {
               </div>
               <Field label="Rows">
                 <Input
-                  value={el.styles.gridTemplateRows}
+                  value={gsv("gridTemplateRows")}
                   onChange={(v) => updateStyle("gridTemplateRows", v)}
                   placeholder="auto"
                 />
@@ -1935,14 +1802,14 @@ export default function PropertiesPanel() {
               <Row>
                 <Field label="Gap">
                   <Input
-                    value={el.styles.gap}
+                    value={gsv("gap")}
                     onChange={(v) => updateStyle("gap", v)}
                     placeholder="24px"
                   />
                 </Field>
                 <Field label="Col Gap">
                   <Input
-                    value={el.styles.columnGap}
+                    value={gsv("columnGap")}
                     onChange={(v) => updateStyle("columnGap", v)}
                     placeholder="—"
                   />
@@ -1950,7 +1817,7 @@ export default function PropertiesPanel() {
               </Row>
               <Field label="Row Gap">
                 <Input
-                  value={el.styles.rowGap}
+                  value={gsv("rowGap")}
                   onChange={(v) => updateStyle("rowGap", v)}
                   placeholder="—"
                 />
@@ -1958,7 +1825,7 @@ export default function PropertiesPanel() {
               <Row>
                 <Field label="Justify">
                   <Select
-                    value={el.styles.justifyContent}
+                    value={gsv("justifyContent")}
                     onChange={(v) => updateStyle("justifyContent", v)}
                     options={[
                       { value: "start", label: "Start" },
@@ -1971,7 +1838,7 @@ export default function PropertiesPanel() {
                 </Field>
                 <Field label="Align">
                   <Select
-                    value={el.styles.alignItems}
+                    value={gsv("alignItems")}
                     onChange={(v) => updateStyle("alignItems", v as any)}
                     options={[
                       { value: "start", label: "Start" },
@@ -1989,30 +1856,30 @@ export default function PropertiesPanel() {
         <Section title="Background">
           <Field label="Color">
             <ColorInput
-              value={el.styles.backgroundColor || ""}
+              value={gsv("backgroundColor") || ""}
               onChange={(v) => updateStyle("backgroundColor", v)}
             />
           </Field>
           <Field label="Image URL">
             <Input
-              value={el.styles.backgroundImage || ""}
+              value={gsv("backgroundImage") || ""}
               onChange={(v) => updateStyle("backgroundImage", v)}
               placeholder="https://..."
             />
           </Field>
           <Field label="Or Upload">
             <MediaPicker
-              value={el.styles.backgroundImage}
+              value={gsv("backgroundImage")}
               onChange={(v) => updateStyle("backgroundImage", v)}
               accept="image/*"
               label="Upload Image"
             />
           </Field>
-          {el.styles.backgroundImage && (
+          {gsv("backgroundImage") && (
             <Row>
               <Field label="Size">
                 <Select
-                  value={el.styles.backgroundSize || "cover"}
+                  value={gsv("backgroundSize") || "cover"}
                   onChange={(v) => updateStyle("backgroundSize", v)}
                   options={[
                     { value: "cover", label: "Cover" },
@@ -2023,7 +1890,7 @@ export default function PropertiesPanel() {
               </Field>
               <Field label="Position">
                 <Select
-                  value={el.styles.backgroundPosition || "center"}
+                  value={gsv("backgroundPosition") || "center"}
                   onChange={(v) => updateStyle("backgroundPosition", v)}
                   options={[
                     { value: "center", label: "Center" },
@@ -2039,20 +1906,23 @@ export default function PropertiesPanel() {
         <Section title="Gradient" collapsible defaultOpen={false}>
           <Field label="Type">
             <Select
-              value={el.styles.gradientType || "none"}
+              value={gsv("gradientType") || "none"}
               onChange={(v) => {
                 const t = v as any;
                 if (t === "linear" || t === "radial") {
-                  updateElement(el.id, {
-                    styles: {
-                      ...el.styles,
-                      gradientType: t,
-                      gradientStartColor:
-                        el.styles.gradientStartColor || "#4f46e5",
-                      gradientEndColor: el.styles.gradientEndColor || "#9333ea",
-                      gradientAngle: el.styles.gradientAngle ?? 135,
+                  updateElement(
+                    el.id,
+                    {
+                      styles: {
+                        gradientType: t,
+                        gradientStartColor:
+                          gsv("gradientStartColor") || "#4f46e5",
+                        gradientEndColor: gsv("gradientEndColor") || "#9333ea",
+                        gradientAngle: gsv("gradientAngle") ?? 135,
+                      },
                     },
-                  });
+                    stylingState,
+                  );
                 } else {
                   updateStyle("gradientType", t);
                 }
@@ -2064,29 +1934,29 @@ export default function PropertiesPanel() {
               ]}
             />
           </Field>
-          {(el.styles.gradientType === "linear" ||
-            el.styles.gradientType === "radial") && (
+          {(gsv("gradientType") === "linear" ||
+            gsv("gradientType") === "radial") && (
             <>
               <Row>
                 <Field label="Start">
                   <ColorInput
-                    value={el.styles.gradientStartColor || "#4f46e5"}
+                    value={gsv("gradientStartColor") || "#4f46e5"}
                     onChange={(v) => updateStyle("gradientStartColor", v)}
                   />
                 </Field>
                 <Field label="End">
                   <ColorInput
-                    value={el.styles.gradientEndColor || "#9333ea"}
+                    value={gsv("gradientEndColor") || "#9333ea"}
                     onChange={(v) => updateStyle("gradientEndColor", v)}
                   />
                 </Field>
               </Row>
-              {el.styles.gradientType === "linear" && (
+              {gsv("gradientType") === "linear" && (
                 <Field label="Angle">
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
-                      value={el.styles.gradientAngle ?? 135}
+                      value={gsv("gradientAngle") ?? 135}
                       onChange={(v) => updateStyle("gradientAngle", v)}
                       placeholder="135"
                     />
@@ -2134,7 +2004,7 @@ export default function PropertiesPanel() {
                       />
                       {(() => {
                         const a =
-                          ((el.styles.gradientAngle ?? 135) - 90) *
+                          ((gsv("gradientAngle") ?? 135) - 90) *
                           (Math.PI / 180);
                         const tx = 15 + Math.cos(a) * 10;
                         const ty = 15 + Math.sin(a) * 10;
@@ -2177,7 +2047,7 @@ export default function PropertiesPanel() {
                       <button
                         key={a}
                         onClick={() => updateStyle("gradientAngle", String(a))}
-                        className={`py-1 text-[11px] rounded transition-all border cursor-pointer ${(el.styles.gradientAngle ?? 135) === a ? "bg-blue-500/20 border-blue-500/40 text-white" : "bg-white/3 border-white/5 text-white/30 hover:text-white/70 hover:bg-white/8"}`}
+                        className={`py-1 text-[11px] rounded transition-all border cursor-pointer ${(gsv("gradientAngle") ?? 135) === a ? "bg-blue-500/20 border-blue-500/40 text-white" : "bg-white/3 border-white/5 text-white/30 hover:text-white/70 hover:bg-white/8"}`}
                       >
                         {l}
                       </button>
@@ -2189,11 +2059,180 @@ export default function PropertiesPanel() {
           )}
         </Section>
 
+        {hasText && (
+          <Section title="Typography">
+            <Row>
+              <Field label="Size">
+                <Input
+                  value={gsv("fontSize")}
+                  onChange={(v) => updateStyle("fontSize", v)}
+                  placeholder="16px"
+                />
+              </Field>
+              <Field label="Weight">
+                <Select
+                  value={gsv("fontWeight")}
+                  onChange={(v) => updateStyle("fontWeight", v)}
+                  options={[
+                    { value: "300", label: "Light" },
+                    { value: "400", label: "Regular" },
+                    { value: "500", label: "Medium" },
+                    { value: "600", label: "Semibold" },
+                    { value: "700", label: "Bold" },
+                    { value: "800", label: "Extrabold" },
+                  ]}
+                />
+              </Field>
+            </Row>
+            <div className="flex gap-1">
+              <ToggleButton
+                active={gsv("fontStyle") === "italic"}
+                onClick={() => toggleStyle("fontStyle", "italic", "normal")}
+                title="Italic"
+              >
+                <Italic size={11} />
+              </ToggleButton>
+              <ToggleButton
+                active={gsv("textDecoration") === "underline"}
+                onClick={() =>
+                  toggleStyle("textDecoration", "underline", "none")
+                }
+                title="Underline"
+              >
+                <Underline size={11} />
+              </ToggleButton>
+              <ToggleButton
+                active={gsv("textDecoration") === "line-through"}
+                onClick={() =>
+                  toggleStyle("textDecoration", "line-through", "none")
+                }
+                title="Strikethrough"
+              >
+                <Strikethrough size={11} />
+              </ToggleButton>
+            </div>
+            <Row>
+              <Field label="Align">
+                <Select
+                  value={gsv("textAlign")}
+                  onChange={(v) => updateStyle("textAlign", v as any)}
+                  options={[
+                    { value: "left", label: "Left" },
+                    { value: "center", label: "Center" },
+                    { value: "right", label: "Right" },
+                    { value: "justify", label: "Justify" },
+                  ]}
+                />
+              </Field>
+              <Field label="Transform">
+                <Select
+                  value={gsv("textTransform")}
+                  onChange={(v) => updateStyle("textTransform", v as any)}
+                  options={[
+                    { value: "none", label: "None" },
+                    { value: "uppercase", label: "ABC" },
+                    { value: "lowercase", label: "abc" },
+                    { value: "capitalize", label: "Abc" },
+                  ]}
+                />
+              </Field>
+            </Row>
+            <Row>
+              <Field label="Line Height">
+                <Input
+                  value={gsv("lineHeight")}
+                  onChange={(v) => updateStyle("lineHeight", v)}
+                  placeholder="1.5"
+                />
+              </Field>
+              <Field label="Spacing">
+                <Input
+                  value={gsv("letterSpacing")}
+                  onChange={(v) => updateStyle("letterSpacing", v)}
+                  placeholder="0px"
+                />
+              </Field>
+            </Row>
+            <Row>
+              <Field label="White Space">
+                <Select
+                  value={gsv("whiteSpace")}
+                  onChange={(v) => updateStyle("whiteSpace", v as any)}
+                  options={[
+                    { value: "normal", label: "Normal" },
+                    { value: "nowrap", label: "No Wrap" },
+                    { value: "pre", label: "Pre" },
+                    { value: "pre-wrap", label: "Pre Wrap" },
+                    { value: "pre-line", label: "Pre Line" },
+                  ]}
+                />
+              </Field>
+              <Field label="Truncate">
+                <Select
+                  value={gsv("textOverflow")}
+                  onChange={(v) => updateStyle("textOverflow", v as any)}
+                  options={[
+                    { value: "clip", label: "Clip" },
+                    { value: "ellipsis", label: "Ellipsis" },
+                  ]}
+                />
+              </Field>
+            </Row>
+            <Field label="Max Lines">
+              <Input
+                value={gsv("lineClamp")}
+                onChange={(v) => updateStyle("lineClamp", v)}
+                placeholder="2"
+                type="number"
+              />
+            </Field>
+            <Field label="Color">
+              <ColorInput
+                value={gsv("color") || "#000000"}
+                onChange={(v) => updateStyle("color", v)}
+              />
+            </Field>
+            <Field label="Font Family">
+              <div className="space-y-2">
+                <Select
+                  value={gsv("fontFamily") || "inherit"}
+                  onChange={(v) => updateStyle("fontFamily", v)}
+                  options={FONT_FAMILIES}
+                />
+                <Input
+                  value={
+                    FONT_FAMILIES.some((f) => f.value === gsv("fontFamily"))
+                      ? ""
+                      : gsv("fontFamily") || ""
+                  }
+                  onChange={(v) => {
+                    const name = v.trim();
+                    if (!name) {
+                      updateStyle("fontFamily", "");
+                      return;
+                    }
+                    loadCustomGoogleFont(name, (loaded) =>
+                      updateStyle("fontFamily", loaded),
+                    );
+                  }}
+                  placeholder="Custom font e.g. Poppins"
+                />
+                <p className="text-[9px] text-white/20 leading-relaxed">
+                  Exports via{" "}
+                  <span className="text-white/35 font-mono">
+                    next/font/google
+                  </span>
+                </p>
+              </div>
+            </Field>
+          </Section>
+        )}
+
         <Section title="Borders" collapsible defaultOpen={false}>
           <Row>
             <Field label="Style">
               <Select
-                value={el.styles.borderStyle}
+                value={gsv("borderStyle")}
                 onChange={(v) => updateStyle("borderStyle", v as any)}
                 options={[
                   { value: "none", label: "None" },
@@ -2205,7 +2244,7 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Radius">
               <Input
-                value={el.styles.borderRadius}
+                value={gsv("borderRadius")}
                 onChange={(v) => updateStyle("borderRadius", v)}
                 placeholder="8px"
               />
@@ -2228,12 +2267,12 @@ export default function PropertiesPanel() {
             {borderLinked ? (
               <div className="space-y-2">
                 <Input
-                  value={el.styles.borderWidth}
+                  value={gsv("borderWidth")}
                   onChange={(v) => updateAllSides("border", v, "Width")}
                   placeholder="1px"
                 />
                 <ColorInput
-                  value={el.styles.borderColor || "#ffffff"}
+                  value={gsv("borderColor") || "#ffffff"}
                   onChange={(v) => updateAllSides("border", v, "Color")}
                 />
               </div>
@@ -2249,7 +2288,7 @@ export default function PropertiesPanel() {
                 ).map((side) => (
                   <Field key={side} label={side.replace("border", "")}>
                     <Input
-                      value={el.styles[side]}
+                      value={gsv(side)}
                       onChange={(v) => updateStyle(side, v)}
                       placeholder="1px solid #e5e7eb"
                     />
@@ -2260,7 +2299,7 @@ export default function PropertiesPanel() {
           </div>
           <Field label="Outline">
             <Input
-              value={el.styles.outline}
+              value={gsv("outline")}
               onChange={(v) => updateStyle("outline", v)}
               placeholder="2px solid #3b82f6"
             />
@@ -2272,8 +2311,8 @@ export default function PropertiesPanel() {
             <Field label="Opacity %">
               <Input
                 value={
-                  el.styles.opacity !== undefined
-                    ? Math.round(el.styles.opacity * 100)
+                  gsv("opacity") !== undefined
+                    ? Math.round(gsv("opacity") * 100)
                     : 100
                 }
                 onChange={(v) => updateStyle("opacity", v)}
@@ -2282,7 +2321,7 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Z-Index">
               <Input
-                value={el.styles.zIndex}
+                value={gsv("zIndex")}
                 onChange={(v) => updateStyle("zIndex", v)}
                 placeholder="0"
               />
@@ -2290,35 +2329,35 @@ export default function PropertiesPanel() {
           </Row>
           <Field label="Box Shadow">
             <Input
-              value={el.styles.boxShadow}
+              value={gsv("boxShadow")}
               onChange={(v) => updateStyle("boxShadow", v)}
               placeholder="0 4px 12px rgba(0,0,0,0.2)"
             />
           </Field>
           <Field label="Backdrop Blur">
             <Input
-              value={el.styles.backdropFilter}
+              value={gsv("backdropFilter")}
               onChange={(v) => updateStyle("backdropFilter", v)}
               placeholder="blur(10px)"
             />
           </Field>
           <Field label="CSS Filter">
             <Input
-              value={el.styles.filter}
+              value={gsv("filter")}
               onChange={(v) => updateStyle("filter", v)}
               placeholder="brightness(0.8) blur(2px)"
             />
           </Field>
           <Field label="Transform">
             <Input
-              value={el.styles.transform}
+              value={gsv("transform")}
               onChange={(v) => updateStyle("transform", v)}
               placeholder="scale(1.1)"
             />
           </Field>
           <Field label="Transition">
             <Input
-              value={el.styles.transition}
+              value={gsv("transition")}
               onChange={(v) => updateStyle("transition", v)}
               placeholder="all 0.2s ease"
             />
@@ -2328,7 +2367,7 @@ export default function PropertiesPanel() {
         <Section title="Interaction" collapsible defaultOpen={false}>
           <Field label="Cursor">
             <Select
-              value={el.styles.cursor}
+              value={gsv("cursor")}
               onChange={(v) => updateStyle("cursor", v)}
               options={[
                 { value: "default", label: "Default" },
@@ -2345,7 +2384,7 @@ export default function PropertiesPanel() {
           <Row>
             <Field label="User Select">
               <Select
-                value={el.styles.userSelect}
+                value={gsv("userSelect")}
                 onChange={(v) => updateStyle("userSelect", v as any)}
                 options={[
                   { value: "auto", label: "Auto" },
@@ -2357,7 +2396,7 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Ptr Events">
               <Select
-                value={el.styles.pointerEvents}
+                value={gsv("pointerEvents")}
                 onChange={(v) => updateStyle("pointerEvents", v as any)}
                 options={[
                   { value: "auto", label: "Auto" },
@@ -2371,7 +2410,7 @@ export default function PropertiesPanel() {
         <Section title="Position" collapsible defaultOpen={false}>
           <Field label="Position">
             <Select
-              value={el.styles.position}
+              value={gsv("position")}
               onChange={(v) => updateStyle("position", v)}
               options={[
                 { value: "static", label: "Static" },
@@ -2382,20 +2421,26 @@ export default function PropertiesPanel() {
               ]}
             />
           </Field>
+          {gsv("position") === "sticky" && (
+            <div className="px-2 py-1.5 bg-amber-500/8 border border-amber-500/15 rounded text-[10px] text-amber-300/70 leading-relaxed">
+              Set <b>Top</b> to <code>0px</code> for a sticky navbar. Parent
+              must not have <code>overflow: hidden</code>.
+            </div>
+          )}
           <div
-            className={`space-y-2.5 transition-opacity duration-200 ${!el.styles.position || el.styles.position === "static" ? "opacity-25 pointer-events-none" : "opacity-100"}`}
+            className={`space-y-2.5 transition-opacity duration-200 ${!gsv("position") || gsv("position") === "static" ? "opacity-25 pointer-events-none" : "opacity-100"}`}
           >
             <Row>
               <Field label="Top">
                 <Input
-                  value={el.styles.top}
+                  value={gsv("top")}
                   onChange={(v) => updateStyle("top", v)}
                   placeholder="0px"
                 />
               </Field>
               <Field label="Right">
                 <Input
-                  value={el.styles.right}
+                  value={gsv("right")}
                   onChange={(v) => updateStyle("right", v)}
                   placeholder="0px"
                 />
@@ -2404,14 +2449,14 @@ export default function PropertiesPanel() {
             <Row>
               <Field label="Bottom">
                 <Input
-                  value={el.styles.bottom}
+                  value={gsv("bottom")}
                   onChange={(v) => updateStyle("bottom", v)}
                   placeholder="0px"
                 />
               </Field>
               <Field label="Left">
                 <Input
-                  value={el.styles.left}
+                  value={gsv("left")}
                   onChange={(v) => updateStyle("left", v)}
                   placeholder="0px"
                 />
