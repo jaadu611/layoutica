@@ -1,7 +1,6 @@
 import { DesignTokens } from "./projectSaverLoader";
 
 export type ElementType =
-  // Layout
   | "div"
   | "section"
   | "article"
@@ -11,9 +10,7 @@ export type ElementType =
   | "nav"
   | "form"
   | "footer"
-  // Presets (semantic shortcuts)
   | "navbar"
-  // Typography
   | "heading"
   | "heading2"
   | "heading3"
@@ -24,28 +21,33 @@ export type ElementType =
   | "blockquote"
   | "code"
   | "pre"
-  // Lists
   | "list"
   | "orderedList"
-  // Media
   | "image"
   | "video"
   | "audio"
   | "iframe"
-  // Decorative
   | "icon"
   | "badge"
   | "divider"
   | "spacer"
-  // Interactive
   | "button"
   | "input"
   | "textarea"
   | "select"
   | "checkbox"
   | "radio"
-  // Table
-  | "table";
+  | "table"
+  | "time"
+  | "progress"
+  | "meter"
+  | "details"
+  | "kbd"
+  | "mark"
+  | "card"
+  | "avatar"
+  | "alert"
+  | "figure";
 
 export interface StyleProps {
   display?:
@@ -126,6 +128,7 @@ export interface StyleProps {
   backdropFilter?: string;
   filter?: string;
 
+  border?: string;
   borderWidth?: string;
   borderStyle?: "solid" | "dashed" | "dotted" | "none";
   borderColor?: string;
@@ -172,10 +175,23 @@ export interface CanvasElement {
   placeholder?: string;
   hoverStyles?: Partial<StyleProps>;
   activeStyles?: Partial<StyleProps>;
+  focusStyles?: Partial<StyleProps>;
   iconName?: string;
   videoSrc?: string;
   iframeSrc?: string;
   videoPoster?: string;
+  fieldName?: string;
+  inputType?: string;
+  formAction?: string;
+  formMethod?: string;
+  formEnctype?: string;
+  dateTime?: string;
+  progressValue?: number;
+  progressMax?: number;
+  alertVariant?: "info" | "success" | "warning" | "error";
+  avatarSrc?: string;
+  avatarInitials?: string;
+  open?: boolean;
   autoPlay?: boolean;
   muted?: boolean;
   loop?: boolean;
@@ -228,9 +244,11 @@ export interface BuilderState {
   editingElementId: string | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
-  components: SavedComponent[];
+   components: SavedComponent[];
+   leftSidebarCollapsed: boolean;
+   rightPanelCollapsed: boolean;
 
-  addPage: (name: string) => void;
+   addPage: (name: string) => void;
   deletePage: (id: string) => void;
   setActivePage: (id: string) => void;
   renamePage: (id: string, name: string) => void;
@@ -279,6 +297,8 @@ export interface BuilderState {
     targetIndex?: number,
   ) => void;
 
-  getActivePage: () => Page | undefined;
-  getSelectedElement: () => CanvasElement | undefined;
-}
+   getActivePage: () => Page | undefined;
+   getSelectedElement: () => CanvasElement | undefined;
+   setLeftSidebarCollapsed: (v: boolean) => void;
+   setRightPanelCollapsed: (v: boolean) => void;
+ }

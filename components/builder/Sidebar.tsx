@@ -3,11 +3,11 @@
 import React, {
   useState,
   useEffect,
-  useLayoutEffect,
   useCallback,
   useRef,
+  createContext,
+  useContext,
 } from "react";
-import gsap from "gsap";
 import { useBuilderStore } from "@/lib/builder/store";
 import {
   SavedComponent,
@@ -58,7 +58,16 @@ import {
   Bold,
   Eye,
   EyeOff,
-  ChevronDown,
+  Lock,
+  Unlock,
+  Search,
+  X,
+  Clock,
+  Highlighter,
+  Keyboard,
+  BarChart2,
+  AlertCircle,
+  CircleUser,
 } from "lucide-react";
 
 export const defaultElement = (
@@ -103,7 +112,7 @@ export const defaultElement = (
     },
     footer: {
       type: "footer",
-      content: "© 2025 My Site. All rights reserved.",
+      content: "\u00a9 2025 My Site. All rights reserved.",
       styles: { textAlign: "center", fontSize: "14px", padding: "24px 32px" },
     },
     navbar: {
@@ -192,9 +201,9 @@ export const defaultElement = (
     },
     code: {
       type: "code",
-      content: "const hello = 'world';",
+      content: "const hello = \'world\';",
       styles: {
-        fontFamily: "'Courier New', monospace",
+        fontFamily: "\'Courier New\', monospace",
         fontSize: "14px",
         backgroundColor: "#f3f4f6",
         color: "#111827",
@@ -207,7 +216,7 @@ export const defaultElement = (
       type: "pre",
       content: "// code block\nconst x = 1;",
       styles: {
-        fontFamily: "'Courier New', monospace",
+        fontFamily: "\'Courier New\', monospace",
         fontSize: "14px",
         backgroundColor: "#1e1e2e",
         color: "#cdd6f4",
@@ -390,6 +399,116 @@ export const defaultElement = (
       },
       styles: { width: "100%", borderCollapse: "collapse", fontSize: "14px" },
     },
+    time: {
+      type: "time",
+      content: "January 1, 2025",
+      dateTime: "2025-01-01",
+      styles: { fontSize: "14px", color: "#6b7280" },
+    },
+    progress: {
+      type: "progress",
+      progressValue: 60,
+      progressMax: 100,
+      styles: { width: "100%", height: "8px", borderRadius: "4px" },
+    },
+    meter: {
+      type: "meter",
+      progressValue: 0.6,
+      progressMax: 1,
+      styles: { width: "100%", height: "20px" },
+    },
+    details: {
+      type: "details",
+      content: "Click to expand",
+      styles: {
+        fontSize: "15px",
+        color: "#111827",
+        padding: "8px 0",
+        cursor: "pointer",
+      },
+    },
+    kbd: {
+      type: "kbd",
+      content: "\u2318K",
+      styles: {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        backgroundColor: "#f3f4f6",
+        color: "#111827",
+        padding: "2px 6px",
+        borderRadius: "4px",
+        border: "1px solid #d1d5db",
+        display: "inline-block",
+      },
+    },
+    mark: {
+      type: "mark",
+      content: "highlighted text",
+      styles: {
+        backgroundColor: "#fef08a",
+        color: "#111827",
+        padding: "0 2px",
+        borderRadius: "2px",
+      },
+    },
+    card: {
+      type: "card",
+      styles: {
+        backgroundColor: "#ffffff",
+        borderRadius: "12px",
+        border: "1px solid #e5e7eb",
+        padding: "24px",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+      },
+      children: [],
+    },
+    avatar: {
+      type: "avatar",
+      avatarInitials: "AB",
+      avatarSrc: "",
+      styles: {
+        width: "48px",
+        height: "48px",
+        borderRadius: "9999px",
+        backgroundColor: "#3b82f6",
+        color: "#ffffff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "16px",
+        fontWeight: "600",
+        overflow: "hidden",
+      },
+    },
+    alert: {
+      type: "alert",
+      content: "This is an alert message.",
+      alertVariant: "info",
+      styles: {
+        backgroundColor: "#eff6ff",
+        color: "#1d4ed8",
+        padding: "12px 16px",
+        borderRadius: "8px",
+        border: "1px solid #bfdbfe",
+        fontSize: "14px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+      },
+    },
+    figure: {
+      type: "figure",
+      styles: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        margin: "0",
+      },
+      children: [],
+    },
   };
   return map[type];
 };
@@ -413,7 +532,6 @@ const GROUPS: ElementGroup[] = [
       { type: "footer", label: "Footer", icon: <Rows size={13} /> },
     ],
   },
-
   {
     label: "Typography",
     icon: <Type size={13} />,
@@ -483,8 +601,278 @@ const GROUPS: ElementGroup[] = [
       { type: "spacer", label: "Spacer", icon: <Space size={13} /> },
     ],
   },
+  {
+    label: "Components",
+    icon: <Package size={13} />,
+    items: [
+      { type: "card", label: "Card", icon: <Square size={13} /> },
+      { type: "alert", label: "Alert", icon: <AlertCircle size={13} /> },
+      { type: "avatar", label: "Avatar", icon: <CircleUser size={13} /> },
+      { type: "figure", label: "Figure", icon: <ImageIcon size={13} /> },
+    ],
+  },
+  {
+    label: "Semantic",
+    icon: <FileText size={13} />,
+    items: [
+      { type: "time", label: "Time", icon: <Clock size={13} /> },
+      { type: "mark", label: "Mark", icon: <Highlighter size={13} /> },
+      { type: "kbd", label: "Kbd", icon: <Keyboard size={13} /> },
+      { type: "details", label: "Details", icon: <ChevronRight size={13} /> },
+      { type: "progress", label: "Progress", icon: <BarChart2 size={13} /> },
+      { type: "meter", label: "Meter", icon: <BarChart2 size={13} /> },
+    ],
+  },
 ];
 
+function getElementIcon(type: string, size = 11) {
+  const p = { size, className: "shrink-0" };
+  if (type === "heading") return <Heading1 {...p} />;
+  if (type === "heading2") return <Heading2 {...p} />;
+  if (type === "heading3") return <Heading3 {...p} />;
+  if (type === "paragraph") return <AlignLeft {...p} />;
+  if (type === "text") return <Type {...p} />;
+  if (type === "span") return <Bold {...p} />;
+  if (type === "link") return <Link2 {...p} />;
+  if (type === "blockquote") return <Quote {...p} />;
+  if (type === "code" || type === "pre") return <Code2 {...p} />;
+  if (type === "badge") return <Tag {...p} />;
+  if (type === "image") return <ImageIcon {...p} />;
+  if (type === "video") return <Video {...p} />;
+  if (type === "audio") return <AudioLines {...p} />;
+  if (type === "iframe") return <MonitorPlay {...p} />;
+  if (type === "icon") return <Smile {...p} />;
+  if (type === "button") return <MousePointer2 {...p} />;
+  if (type === "input") return <FormInput {...p} />;
+  if (type === "textarea") return <TextCursorInput {...p} />;
+  if (type === "select") return <ListFilter {...p} />;
+  if (type === "checkbox") return <CheckSquare {...p} />;
+  if (type === "radio") return <CircleDot {...p} />;
+  if (type === "table") return <Table2 {...p} />;
+  if (type === "divider") return <Minus {...p} />;
+  if (type === "spacer") return <Space {...p} />;
+  if (type === "list" || type === "orderedList") return <List {...p} />;
+  if (type === "section" || type === "main") return <Layout {...p} />;
+  if (type === "header" || type === "nav" || type === "navbar")
+    return <Navigation {...p} />;
+  if (type === "form") return <FormInput {...p} />;
+  if (type === "article") return <FileText {...p} />;
+  if (type === "aside" || type === "footer") return <Rows {...p} />;
+  if (type === "card") return <Square {...p} />;
+  if (type === "alert") return <AlertCircle {...p} />;
+  if (type === "avatar") return <CircleUser {...p} />;
+  if (type === "figure") return <ImageIcon {...p} />;
+  if (type === "time") return <Clock {...p} />;
+  if (type === "mark") return <Highlighter {...p} />;
+  if (type === "kbd") return <Keyboard {...p} />;
+  if (type === "details") return <ChevronRight {...p} />;
+  if (type === "progress" || type === "meter") return <BarChart2 {...p} />;
+  return <Square {...p} />;
+}
+
+function getDisplayName(el: CanvasElement): string {
+  return (
+    el.metadata?.name ||
+    el.content?.slice(0, 22) ||
+    el.type.replace(/([A-Z])/g, " $1").trim()
+  );
+}
+
+// FIX: recursively checks children too, not just top level
+function matchesSearch(el: CanvasElement, q: string): boolean {
+  if (!q) return true;
+  const lq = q.toLowerCase();
+  const selfMatch =
+    getDisplayName(el).toLowerCase().includes(lq) ||
+    el.type.toLowerCase().includes(lq);
+  if (selfMatch) return true;
+  return el.children?.some((c) => matchesSearch(c, lq)) ?? false;
+}
+
+interface DragState {
+  draggingId: string | null;
+  dropTargetId: string | null;
+  dropPos: "before" | "after" | "inside";
+  setDragging: (id: string | null) => void;
+  setDropTarget: (
+    id: string | null,
+    pos: "before" | "after" | "inside",
+  ) => void;
+}
+
+const DragCtx = createContext<DragState>({
+  draggingId: null,
+  dropTargetId: null,
+  dropPos: "after",
+  setDragging: () => {},
+  setDropTarget: () => {},
+});
+
+function LayerRow({
+  el,
+  depth,
+  onDrop,
+  onDragEnd,
+  searchQuery,
+}: {
+  el: CanvasElement;
+  depth: number;
+  onDrop: (e: React.DragEvent, targetId: string) => void;
+  onDragEnd: () => void;
+  searchQuery: string;
+}) {
+  const {
+    selectedElementId,
+    selectedElementIds,
+    selectElement,
+    updateElement,
+    setStylingState,
+  } = useBuilderStore();
+  const { draggingId, dropTargetId, dropPos, setDragging, setDropTarget } =
+    useContext(DragCtx);
+  const [expanded, setExpanded] = useState(true);
+
+  const isSelected = selectedElementId === el.id;
+  const isMultiSelected = (selectedElementIds ?? []).includes(el.id);
+  const hasChildren = (el.children?.length ?? 0) > 0;
+  const isHidden = !!el.metadata?.isHidden;
+  const isLocked = !!el.metadata?.isLocked;
+  const isDragging = draggingId === el.id;
+  const isDropTarget = dropTargetId === el.id && draggingId !== el.id;
+
+  // FIX: properly dim elements that don't match search (checking recursively)
+  const selfMatches = matchesSearch(el, searchQuery);
+  const dimmed = !!(searchQuery && !selfMatches);
+  const highlighted = !!(searchQuery &&
+  selfMatches &&
+  !el.children?.some((c) => matchesSearch(c, searchQuery)) === false
+    ? false
+    : searchQuery &&
+      (getDisplayName(el).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        el.type.toLowerCase().includes(searchQuery.toLowerCase())));
+
+  const toggleHidden = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    updateElement(el.id, { metadata: { ...el.metadata, isHidden: !isHidden } });
+  };
+  const toggleLocked = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    updateElement(el.id, { metadata: { ...el.metadata, isLocked: !isLocked } });
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const relY = (e.clientY - rect.top) / rect.height;
+    const pos: "before" | "after" | "inside" =
+      relY < 0.25 ? "before" : relY > 0.75 ? "after" : "inside";
+    setDropTarget(el.id, pos);
+  };
+
+  return (
+    <>
+      {isDropTarget && dropPos === "before" && (
+        <div className="h-0.5 bg-blue-500 rounded-full mx-2 pointer-events-none" />
+      )}
+
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.stopPropagation();
+          setDragging(el.id);
+        }}
+        onDragOver={handleDragOver}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDrop(e, el.id);
+        }}
+        onDragEnd={onDragEnd}
+        onClick={() => {
+          selectElement(el.id);
+          setStylingState("default");
+        }}
+        className={`group flex items-center gap-1 px-2 py-[4px] cursor-pointer select-none transition-all
+          ${isSelected ? "bg-blue-600/20 text-white" : "hover:bg-white/5 text-white/55"}
+          ${isDragging ? "opacity-30" : ""}
+          ${dimmed ? "opacity-20" : ""}
+          ${isDropTarget && dropPos === "inside" ? "ring-1 ring-inset ring-blue-500 rounded" : ""}
+          ${highlighted ? "bg-blue-500/8 text-white/90" : ""}
+          ${isMultiSelected && !isSelected ? "bg-violet-500/10" : ""}
+        `}
+        style={{ paddingLeft: depth * 12 + 8 }}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasChildren) setExpanded((v) => !v);
+          }}
+          className={`w-3.5 h-3.5 flex items-center justify-center shrink-0 transition-transform ${hasChildren ? "opacity-40 hover:opacity-80" : "opacity-0 pointer-events-none"} ${expanded ? "rotate-90" : ""}`}
+        >
+          <ChevronRight size={11} />
+        </button>
+
+        <span
+          className={`shrink-0 ${isSelected ? "text-blue-400" : isMultiSelected ? "text-violet-400" : "text-white/30 group-hover:text-white/60"} transition-colors`}
+        >
+          {getElementIcon(el.type)}
+        </span>
+
+        <span
+          className={`flex-1 text-[11px] font-medium truncate ml-1 ${isHidden ? "line-through opacity-40" : ""}`}
+        >
+          {getDisplayName(el)}
+        </span>
+
+        <span className="text-[9px] text-white/20 font-mono shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mr-1">
+          {el.type}
+        </span>
+
+        <button
+          onClick={toggleHidden}
+          title={isHidden ? "Show" : "Hide"}
+          className={`shrink-0 p-0.5 rounded transition-all ${isHidden ? "text-white/40" : "text-white/0 group-hover:text-white/30 hover:text-white/70!"}`}
+        >
+          {isHidden ? <EyeOff size={10} /> : <Eye size={10} />}
+        </button>
+        <button
+          onClick={toggleLocked}
+          title={isLocked ? "Unlock" : "Lock"}
+          className={`shrink-0 p-0.5 rounded transition-all ${isLocked ? "text-amber-400/70" : "text-white/0 group-hover:text-white/30 hover:text-white/70!"}`}
+        >
+          {isLocked ? <Lock size={10} /> : <Unlock size={10} />}
+        </button>
+      </div>
+
+      {isDropTarget && dropPos === "after" && (
+        <div className="h-0.5 bg-blue-500 rounded-full mx-2 pointer-events-none" />
+      )}
+
+      {hasChildren &&
+        expanded &&
+        el.children!.map((child) => (
+          <LayerRow
+            key={child.id}
+            el={child}
+            depth={depth + 1}
+            onDrop={onDrop}
+            onDragEnd={onDragEnd}
+            searchQuery={searchQuery}
+          />
+        ))}
+    </>
+  );
+}
+
+// FIX: Replaced GSAP-based open/close with pure CSS max-height transition.
+// Root causes of the two reported bugs:
+//   1. "Tall on reload" — GSAP fires after React paint, so the div renders
+//      at full height for one frame. CSS-only avoids this entirely.
+//   2. "Can't reopen after collapse" — GSAP set display:none in onComplete,
+//      but when reopening it called set({ display:"block" }) then fromTo,
+//      and clearProps didn't include "display", so display:none persisted.
+//      CSS transitions never touch display, so this race condition is gone.
 function GroupRow({
   group,
   onAdd,
@@ -493,57 +881,6 @@ function GroupRow({
   onAdd: (type: ElementType) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const chevronRef = useRef<SVGSVGElement>(null);
-  const isFirst = useRef(true);
-
-  useEffect(() => {
-    if (!contentRef.current) return;
-    if (isFirst.current) {
-      isFirst.current = false;
-      gsap.set(contentRef.current, {
-        height: open ? "auto" : 0,
-        opacity: open ? 1 : 0,
-        overflow: "hidden",
-      });
-      return;
-    }
-    if (open) {
-      gsap.set(contentRef.current, { display: "block" });
-      gsap.fromTo(
-        contentRef.current,
-        { height: 0, opacity: 0 },
-        {
-          height: "auto",
-          opacity: 1,
-          duration: 0.22,
-          ease: "power3.out",
-          clearProps: "height,overflow",
-        },
-      );
-    } else {
-      gsap.to(contentRef.current, {
-        height: 0,
-        opacity: 0,
-        duration: 0.18,
-        ease: "power3.in",
-        onComplete: () => {
-          if (contentRef.current)
-            gsap.set(contentRef.current, { display: "none" });
-        },
-      });
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!chevronRef.current) return;
-    gsap.to(chevronRef.current, {
-      rotation: open ? 90 : 0,
-      duration: 0.2,
-      ease: "power2.inOut",
-      transformOrigin: "50% 50%",
-    });
-  }, [open]);
 
   return (
     <div>
@@ -554,18 +891,28 @@ function GroupRow({
         <span className="text-white/25 group-hover:text-white/50 transition-colors">
           {group.icon}
         </span>
-        <span className="flex-1 text-left text-[10px] uppercase tracking-[0.12em] font-bold text-white/30 group-hover:text-white/50 transition-colors">
+        <span className="flex-1 text-left text-[9px] uppercase tracking-[0.14em] font-bold text-white/50 group-hover:text-white/80 transition-colors">
           {group.label}
         </span>
+        {/* FIX: CSS rotate instead of GSAP — no timing issues */}
         <ChevronRight
-          ref={chevronRef as any}
           size={10}
-          className="text-white/20 shrink-0"
-          style={{ willChange: "transform" }}
+          className="text-white/20 shrink-0 transition-transform duration-200"
+          style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
         />
       </button>
 
-      <div ref={contentRef} style={{ overflow: "hidden" }}>
+      {/* FIX: CSS max-height transition — no GSAP, no display:none, no flash */}
+      <div
+        style={{
+          overflow: "hidden",
+          maxHeight: open ? "600px" : "0px",
+          opacity: open ? 1 : 0,
+          transition: open
+            ? "max-height 0.22s ease-out, opacity 0.18s ease-out"
+            : "max-height 0.18s ease-in, opacity 0.14s ease-in",
+        }}
+      >
         <div className="pl-2 pb-1 space-y-0.5">
           {group.items.map(({ type, label, icon }) => (
             <div
@@ -581,7 +928,7 @@ function GroupRow({
               <span className="text-white/25 group-hover/item:text-blue-400 transition-colors shrink-0">
                 {icon}
               </span>
-              <span className="flex-1 text-[11px] text-white/55 group-hover/item:text-white/90 font-medium transition-colors">
+              <span className="flex-1 text-[10px] text-white/80 group-hover/item:text-white font-medium transition-colors">
                 {label}
               </span>
               <GripVertical
@@ -644,7 +991,7 @@ function ComponentRow({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <div className="text-[11px] text-white/60 group-hover:text-white/90 font-medium truncate">
+          <div className="text-[10px] text-white/85 group-hover:text-white font-medium truncate">
             {comp.name}
           </div>
         )}
@@ -683,167 +1030,6 @@ function ComponentRow({
   );
 }
 
-function LayerTreeItem({
-  el,
-  depth = 0,
-  activeId,
-  hoveredId,
-  onSelect,
-  onHover,
-  onLeave,
-}: {
-  el: CanvasElement;
-  depth?: number;
-  activeId: string | null;
-  hoveredId: string | null;
-  onSelect: (id: string) => void;
-  onHover: (id: string) => void;
-  onLeave: () => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const isSelected = activeId === el.id;
-  const isHovered = hoveredId === el.id;
-  const hasChildren = el.children && el.children.length > 0;
-
-  const displayName =
-    el.metadata?.name || el.type.charAt(0).toUpperCase() + el.type.slice(1);
-
-  return (
-    <div>
-      <div
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(el.id);
-        }}
-        onMouseEnter={(e) => {
-          e.stopPropagation();
-          onHover(el.id);
-        }}
-        onMouseLeave={onLeave}
-        className={`flex items-center h-7 px-2 cursor-pointer transition-colors ${
-          isSelected
-            ? "bg-blue-500/15 text-blue-400"
-            : isHovered
-              ? "bg-white/5 text-white/90"
-              : "text-white/60 hover:text-white/80"
-        }`}
-        style={{ paddingLeft: `${depth * 10 + 8}px` }}
-      >
-        <div className="flex items-center justify-center w-4 h-4 mr-1 opacity-50">
-          {hasChildren ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setExpanded(!expanded);
-              }}
-              className="hover:text-white"
-            >
-              <ChevronRight
-                size={12}
-                className={`transition-transform ${expanded ? "rotate-90" : ""}`}
-              />
-            </button>
-          ) : (
-            <span className="w-1 h-1 rounded-full bg-white/20" />
-          )}
-        </div>
-
-        {/* Detailed icon mapping */}
-        <div className="mr-2 opacity-70">
-          {el.type === "div" ? (
-            <Square size={11} />
-          ) : el.type === "section" ? (
-            <Layout size={11} />
-          ) : el.type === "article" ? (
-            <FileText size={11} />
-          ) : el.type === "aside" || el.type === "footer" ? (
-            <Rows size={11} />
-          ) : el.type === "main" ? (
-            <Layout size={11} />
-          ) : el.type === "header" ||
-            el.type === "nav" ||
-            el.type === "navbar" ? (
-            <Navigation size={11} />
-          ) : el.type === "form" || el.type === "input" ? (
-            <FormInput size={11} />
-          ) : el.type === "heading" ? (
-            <Heading1 size={11} />
-          ) : el.type === "heading2" ? (
-            <Heading2 size={11} />
-          ) : el.type === "heading3" ? (
-            <Heading3 size={11} />
-          ) : el.type === "paragraph" ? (
-            <AlignLeft size={11} />
-          ) : el.type === "text" ? (
-            <Type size={11} />
-          ) : el.type === "span" ? (
-            <Bold size={11} />
-          ) : el.type === "link" ? (
-            <Link2 size={11} />
-          ) : el.type === "list" || el.type === "orderedList" ? (
-            <List size={11} />
-          ) : el.type === "blockquote" ? (
-            <Quote size={11} />
-          ) : el.type === "code" || el.type === "pre" ? (
-            <Code2 size={11} />
-          ) : el.type === "badge" ? (
-            <Tag size={11} />
-          ) : el.type === "image" ? (
-            <ImageIcon size={11} />
-          ) : el.type === "video" ? (
-            <Video size={11} />
-          ) : el.type === "audio" ? (
-            <AudioLines size={11} />
-          ) : el.type === "iframe" ? (
-            <MonitorPlay size={11} />
-          ) : el.type === "icon" ? (
-            <Smile size={11} />
-          ) : el.type === "button" ? (
-            <MousePointer2 size={11} />
-          ) : el.type === "textarea" ? (
-            <TextCursorInput size={11} />
-          ) : el.type === "select" ? (
-            <ListFilter size={11} />
-          ) : el.type === "checkbox" ? (
-            <CheckSquare size={11} />
-          ) : el.type === "radio" ? (
-            <CircleDot size={11} />
-          ) : el.type === "table" ? (
-            <Table2 size={11} />
-          ) : el.type === "divider" ? (
-            <Minus size={11} />
-          ) : el.type === "spacer" ? (
-            <Space size={11} />
-          ) : (
-            <Frame size={11} />
-          )}
-        </div>
-
-        <span className="text-[11px] font-medium truncate flex-1">
-          {displayName}
-        </span>
-      </div>
-
-      {hasChildren && expanded && (
-        <div>
-          {el.children!.map((child) => (
-            <LayerTreeItem
-              key={child.id}
-              el={child}
-              depth={depth + 1}
-              activeId={activeId}
-              hoveredId={hoveredId}
-              onSelect={onSelect}
-              onHover={onHover}
-              onLeave={onLeave}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Sidebar() {
   const {
     pages,
@@ -859,36 +1045,164 @@ export default function Sidebar() {
     insertComponent,
     getActivePage,
     selectedElementId,
-    hoveredElementId,
     selectElement,
-    setHoveredElement,
+    reorderElement,
+    setStylingState,
   } = useBuilderStore();
 
   const [tab, setTab] = useState<"layers" | "assets" | "pages">("layers");
   const [newPageName, setNewPageName] = useState("");
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const [draggingId, setDraggingIdState] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetIdState] = useState<string | null>(null);
+  const [dropPos, setDropPosState] = useState<"before" | "after" | "inside">(
+    "after",
+  );
+
+  const setDragging = useCallback(
+    (id: string | null) => setDraggingIdState(id),
+    [],
+  );
+  const setDropTarget = useCallback(
+    (id: string | null, pos: "before" | "after" | "inside") => {
+      setDropTargetIdState(id);
+      setDropPosState(pos);
+    },
+    [],
+  );
+
+  const dragCtx: DragState = {
+    draggingId,
+    dropTargetId,
+    dropPos,
+    setDragging,
+    setDropTarget,
+  };
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetId: string) => {
+      e.preventDefault();
+      if (!draggingId || draggingId === targetId) {
+        setDragging(null);
+        setDropTarget(null, "after");
+        return;
+      }
+
+      const pg = getActivePage();
+      if (!pg) return;
+
+      if (dropPos === "inside") {
+        reorderElement(draggingId, targetId, 0);
+        setDragging(null);
+        setDropTarget(null, "after");
+        return;
+      }
+
+      type NodeInfo = { parentId: string | undefined; index: number };
+      const nodeMap = new Map<string, NodeInfo>();
+
+      const walk = (els: CanvasElement[], parentId: string | undefined) => {
+        els.forEach((el, idx) => {
+          nodeMap.set(el.id, { parentId, index: idx });
+          if (el.children?.length) walk(el.children, el.id);
+        });
+      };
+      walk(pg.elements, undefined);
+
+      const targetInfo = nodeMap.get(targetId);
+      if (!targetInfo) {
+        setDragging(null);
+        setDropTarget(null, "after");
+        return;
+      }
+
+      const insertIndex =
+        dropPos === "before" ? targetInfo.index : targetInfo.index + 1;
+      reorderElement(draggingId, targetInfo.parentId, insertIndex);
+
+      setDragging(null);
+      setDropTarget(null, "after");
+    },
+    [
+      draggingId,
+      dropPos,
+      reorderElement,
+      getActivePage,
+      setDragging,
+      setDropTarget,
+    ],
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setDragging(null);
+    setDropTarget(null, "after");
+  }, [setDragging, setDropTarget]);
+
+  useEffect(() => {
+    if (tab !== "layers") return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if (!selectedElementId) return;
+      const active = document.activeElement;
+      if (
+        active &&
+        (active.tagName === "INPUT" || active.tagName === "TEXTAREA")
+      )
+        return;
+      const pg = getActivePage();
+      if (!pg) return;
+      const flat: string[] = [];
+      const walk = (els: CanvasElement[]) => {
+        for (const el of els) {
+          flat.push(el.id);
+          if (el.children) walk(el.children);
+        }
+      };
+      walk(pg.elements);
+      const idx = flat.indexOf(selectedElementId);
+      if (e.key === "ArrowUp" && idx > 0) {
+        e.preventDefault();
+        selectElement(flat[idx - 1]);
+        setStylingState("default");
+      }
+      if (e.key === "ArrowDown" && idx < flat.length - 1) {
+        e.preventDefault();
+        selectElement(flat[idx + 1]);
+        setStylingState("default");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [tab, selectedElementId, getActivePage, selectElement, setStylingState]);
 
   const activePage = getActivePage();
 
+  // FIX: guard against empty string to prevent phantom page creation
   const handleAddPage = () => {
-    if (!newPageName.trim()) return;
-    addPage(newPageName.trim());
+    const name = newPageName.trim();
+    if (!name) return;
+    addPage(name);
     setNewPageName("");
   };
 
   const handleAdd = (type: ElementType) => addElement(defaultElement(type));
 
   return (
-    <div className="w-[240px] border-r border-[#383838] bg-[#2c2c2c] flex flex-col shrink-0 overflow-hidden select-none">
+    <div className="w-full flex-1 flex flex-col min-h-0 overflow-hidden select-none">
       <div className="flex border-b border-[#383838] h-11 px-2 shrink-0">
         {(["layers", "assets", "pages"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 flex items-center justify-center text-[11px] font-medium capitalize cursor-pointer transition-colors relative ${
-              tab === t ? "text-white" : "text-white/40 hover:text-white/70"
-            }`}
+            className={`flex-1 flex items-center justify-center text-[11px] font-medium capitalize cursor-pointer transition-colors relative ${tab === t ? "text-white" : "text-white/40 hover:text-white/70"}`}
           >
             {t}
             {tab === t && (
@@ -898,35 +1212,77 @@ export default function Sidebar() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto w-full custom-scrollbar">
+      <div className="flex-1 overflow-y-auto w-full min-h-0">
         {tab === "layers" && (
-          <div className="py-2">
-            {!activePage?.elements?.length ? (
-              <div className="px-4 py-8 text-center text-white/30 text-[11px]">
-                No layers on this page.
-                <br />
-                Add elements from Assets.
-              </div>
-            ) : (
-              activePage.elements.map((el) => (
-                <LayerTreeItem
-                  key={el.id}
-                  el={el}
-                  activeId={selectedElementId}
-                  hoveredId={hoveredElementId}
-                  onSelect={selectElement}
-                  onHover={setHoveredElement}
-                  onLeave={() => setHoveredElement(null)}
+          <DragCtx.Provider value={dragCtx}>
+            <div className="px-2 pt-2 pb-1 border-b border-[#333] shrink-0">
+              <div className="relative">
+                <Search
+                  size={10}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none"
                 />
-              ))
-            )}
-          </div>
+                <input
+                  ref={searchRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search layers\u2026 (\u2318F)"
+                  className="w-full text-[11px] bg-[#222] border border-white/8 hover:border-white/15 focus:border-blue-500/50 rounded pl-6 pr-6 py-1 outline-none text-white placeholder-white/20 transition-all"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+                  >
+                    <X size={10} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="py-1">
+              {!activePage?.elements?.length ? (
+                <div className="px-4 py-8 text-center text-white/25 text-[11px]">
+                  No layers yet.
+                  <br />
+                  Add elements from Assets.
+                </div>
+              ) : (
+                <>
+                  {activePage.elements.map((el) => (
+                    <LayerRow
+                      key={el.id}
+                      el={el}
+                      depth={0}
+                      onDrop={handleDrop}
+                      onDragEnd={handleDragEnd}
+                      searchQuery={search}
+                    />
+                  ))}
+                  {/* FIX: end-of-list drop zone uses pg.elements.length instead of Infinity */}
+                  <div
+                    className="h-3"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggingId && activePage) {
+                        reorderElement(
+                          draggingId,
+                          undefined,
+                          activePage.elements.length,
+                        );
+                        setDragging(null);
+                      }
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          </DragCtx.Provider>
         )}
 
         {tab === "assets" && (
           <div className="space-y-4 p-2">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/40 mb-2 px-1 font-semibold">
+              <p className="text-[9px] uppercase tracking-widest text-white/60 mb-2 px-1 font-bold">
                 Elements
               </p>
               <div className="space-y-0.5">
@@ -935,9 +1291,8 @@ export default function Sidebar() {
                 ))}
               </div>
             </div>
-
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/40 mb-2 px-1 font-semibold">
+              <p className="text-[9px] uppercase tracking-widest text-white/60 mb-2 px-1 font-bold">
                 Saved Components
               </p>
               {components.length === 0 ? (
@@ -973,11 +1328,7 @@ export default function Sidebar() {
               <div
                 key={page.id}
                 onClick={() => setActivePage(page.id)}
-                className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-md cursor-pointer transition-colors ${
-                  page.id === activePageId
-                    ? "bg-blue-500/15 text-blue-400"
-                    : "text-white/40 hover:bg-white/5 hover:text-white/80"
-                }`}
+                className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-md cursor-pointer transition-colors ${page.id === activePageId ? "bg-blue-500/15 text-blue-400" : "text-white/40 hover:bg-white/5 hover:text-white/80"}`}
               >
                 <FileText
                   size={12}
@@ -987,7 +1338,6 @@ export default function Sidebar() {
                       : "opacity-40 group-hover:opacity-100"
                   }
                 />
-
                 {editingPageId === page.id ? (
                   <input
                     autoFocus
@@ -1009,7 +1359,6 @@ export default function Sidebar() {
                     {page.name}
                   </span>
                 )}
-
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => {
@@ -1035,7 +1384,6 @@ export default function Sidebar() {
                 </div>
               </div>
             ))}
-
             <div className="mt-4 flex gap-1 px-1">
               <input
                 type="text"

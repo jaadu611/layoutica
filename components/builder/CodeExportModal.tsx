@@ -86,6 +86,7 @@ function buildBoilerplate(): Record<string, string> {
       next: NEXT_VERSION,
       react: REACT_VERSION,
       "react-dom": REACT_VERSION,
+      "react-syntax-highlighter": "^15.5.0",
     },
     devDependencies: {
       "@types/node": "^20",
@@ -423,12 +424,9 @@ export default function CodeExportModal({ files, onClose }: Props) {
   }, []);
 
   const copyAll = useCallback(() => {
-    copy(
-      "__all__",
-      generatedPaths
-        .map((f) => `// ===== ${f} =====\n\n${files[f]}`)
-        .join("\n\n\n"),
-    );
+    // Copy without file headers so the output can be pasted directly
+    const text = generatedPaths.map((f) => files[f]).join("\n\n");
+    copy("__all__", text);
   }, [generatedPaths, files, copy]);
 
   const handleDownload = async () => {

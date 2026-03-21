@@ -7,6 +7,8 @@ import React, {
   useCallback,
   useRef,
 } from "react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useBuilderStore } from "@/lib/builder/store";
 import { ElementType, CanvasElement } from "@/lib/builder/types";
 import { defaultElement } from "./Sidebar";
@@ -79,9 +81,7 @@ function buildStateCSS(elements: CanvasElement[]): string {
     const hasHover = el.hoverStyles && Object.keys(el.hoverStyles).length > 0;
     const hasActive =
       el.activeStyles && Object.keys(el.activeStyles).length > 0;
-    const hasFocus =
-      (el as any).focusStyles &&
-      Object.keys((el as any).focusStyles).length > 0;
+    const hasFocus = el.focusStyles && Object.keys(el.focusStyles).length > 0;
 
     // Emit transition on base selector so hover/active/focus animate smoothly.
     // Inline style="" transitions don't animate against stylesheet pseudo-class rules.
@@ -104,7 +104,7 @@ function buildStateCSS(elements: CanvasElement[]): string {
     }
     if (hasFocus) {
       const decl = styleObjToDeclarations(
-        (el as any).focusStyles as Record<string, any>,
+        el.focusStyles as Record<string, any>,
       );
       if (decl) rules.push(`[data-bid="${el.id}"]:focus {\n${decl}\n}`);
     }
@@ -451,9 +451,104 @@ function RenderElement({
     updateElement,
   } = useBuilderStore();
 
+  // ── Selection state ───────────────────────────────────────────────────────
+  const isSelected = selectedElementId === el.id;
+  const isMultiSelected = (selectedElementIds ?? []).includes(el.id);
+  const isAnySelected = isSelected || isMultiSelected;
+  const isHovered = hoveredElementId === el.id && !isAnySelected;
+  const isEditing = editingId === el.id;
+  const isTarget = dropTargetId === el.id && draggingId !== el.id;
+  const isHorizontal =
+    el.styles.display === "flex" && el.styles.flexDirection !== "column";
+  const canHaveChildren = [
+    "div",
+    "section",
+    "article",
+    "aside",
+    "main",
+    "header",
+    "footer",
+    "nav",
+    "form",
+    "navbar",
+    "card",
+    "figure",
+  ].includes(el.type);
+  const isTextType = TEXT_TYPES.has(el.type);
+
+  // ── Visibility / lock ────────────────────────────────────────────────────
+  const isHidden = !!el.metadata?.isHidden;
+  const isLocked = !!el.metadata?.isLocked;
+
   const isResizing = useRef(false);
   const startPos = useRef({ x: 0, y: 0 });
   const startSize = useRef({ width: 0, height: 0 });
+  const isDraggingFree = useRef(false);
+  const startElPos = useRef({ top: 0, left: 0 });
+
+  const onFreeDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      if (isEditing || isLocked) return;
+      const pos = el.styles.position;
+      if (pos !== "absolute" && pos !== "fixed") return;
+      e.preventDefault();
+      e.stopPropagation();
+      isDraggingFree.current = true;
+      selectElement(el.id);
+
+      const node = e.currentTarget as HTMLElement;
+      const offsetParent =
+        (node.offsetParent as HTMLElement) || document.documentElement;
+      const parentRect = offsetParent.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+
+      // Use the element's actual rendered top/left relative to its offset parent.
+      // This is critical for the first drag after switching to absolute — el.styles.top
+      // may be undefined/0 while the element is visually somewhere else in the flow.
+      const actualTop = nodeRect.top - parentRect.top + offsetParent.scrollTop;
+      const actualLeft =
+        nodeRect.left - parentRect.left + offsetParent.scrollLeft;
+
+      startElPos.current = { top: actualTop, left: actualLeft };
+
+      // Record mouse position relative to the parent origin
+      startPos.current = {
+        x: e.clientX - parentRect.left,
+        y: e.clientY - parentRect.top,
+      };
+
+      // Immediately write the actual position so styles match reality before any move
+      updateElement(el.id, {
+        styles: {
+          top: `${Math.round(actualTop)}px`,
+          left: `${Math.round(actualLeft)}px`,
+        },
+      });
+
+      const onMove = (mv: MouseEvent) => {
+        if (!isDraggingFree.current) return;
+        const pr = offsetParent.getBoundingClientRect();
+        const mouseX = mv.clientX - pr.left;
+        const mouseY = mv.clientY - pr.top;
+        const dx = mouseX - startPos.current.x;
+        const dy = mouseY - startPos.current.y;
+        updateElement(el.id, {
+          styles: {
+            top: `${Math.round(startElPos.current.top + dy)}px`,
+            left: `${Math.round(startElPos.current.left + dx)}px`,
+          },
+        });
+      };
+      const onUp = () => {
+        isDraggingFree.current = false;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [el.id, el.styles, isEditing, isLocked, selectElement, updateElement],
+  );
 
   const onResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -486,33 +581,6 @@ function RenderElement({
     [el.id, el.styles, updateElement],
   );
 
-  // ── Selection state ───────────────────────────────────────────────────────
-  const isSelected = selectedElementId === el.id;
-  const isMultiSelected = (selectedElementIds ?? []).includes(el.id);
-  const isAnySelected = isSelected || isMultiSelected;
-  const isHovered = hoveredElementId === el.id && !isAnySelected;
-  const isEditing = editingId === el.id;
-  const isTarget = dropTargetId === el.id && draggingId !== el.id;
-  const isHorizontal =
-    el.styles.display === "flex" && el.styles.flexDirection !== "column";
-  const canHaveChildren = [
-    "div",
-    "section",
-    "article",
-    "aside",
-    "main",
-    "header",
-    "footer",
-    "nav",
-    "form",
-    "navbar",
-  ].includes(el.type);
-  const isTextType = TEXT_TYPES.has(el.type);
-
-  // ── Visibility / lock ────────────────────────────────────────────────────
-  const isHidden = !!el.metadata?.isHidden;
-  const isLocked = !!el.metadata?.isLocked;
-
   const {
     gradientType,
     gradientAngle,
@@ -522,9 +590,18 @@ function RenderElement({
     ...restStyles
   } = el.styles as any;
 
+  const isAbsolute =
+    el.styles.position === "absolute" || el.styles.position === "fixed";
+
   const wrapperStyle: React.CSSProperties = {
     position: (restStyles.position as any) || "relative",
-    cursor: isEditing ? "text" : isLocked ? "not-allowed" : "grab",
+    cursor: isEditing
+      ? "text"
+      : isLocked
+        ? "not-allowed"
+        : isAbsolute
+          ? "move"
+          : "grab",
     // Hidden elements show at 30% opacity in editor so you can still see/select them
     opacity:
       draggingId === el.id ? 0.3 : isHidden ? 0.25 : (restStyles.opacity ?? 1),
@@ -580,7 +657,7 @@ function RenderElement({
     aside: "aside",
     main: "main",
   };
-  const htmlTag = (el as any).htmlTag || TAG_MAP[el.type] || "div";
+  const htmlTag = el.htmlTag || TAG_MAP[el.type] || "div";
 
   const wrapperProps: any = {
     "data-bid": el.id,
@@ -596,7 +673,7 @@ function RenderElement({
     },
     onDoubleClick: (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (isLocked) return; // locked elements can't be edited
+      if (isLocked) return;
       selectElement(el.id);
       if (isTextType) onStartEdit(el.id);
     },
@@ -605,9 +682,12 @@ function RenderElement({
       setHoveredElement(el.id);
     },
     onMouseLeave: () => setHoveredElement(null),
-    draggable: !isEditing && !isLocked, // locked elements can't be dragged
+    // Absolute/fixed elements use free mouse-drag — disable HTML5 drag so
+    // it doesn't interfere, and handle movement via onMouseDown instead.
+    draggable: !isEditing && !isLocked && !isAbsolute,
+    onMouseDown: isAbsolute ? onFreeDragStart : undefined,
     onDragStart: (e: React.DragEvent) => {
-      if (isEditing || isLocked) {
+      if (isEditing || isLocked || isAbsolute) {
         e.preventDefault();
         return;
       }
@@ -710,8 +790,13 @@ function RenderElement({
           style={{
             pointerEvents: "none",
             border: "none",
-            borderTop: el.styles.borderTop || "1px solid #e5e7eb",
-            width: "100%",
+            borderTop:
+              (el.styles as any).border ||
+              el.styles.borderTop ||
+              "1px solid #e5e7eb",
+            width: el.styles.width || "100%",
+            marginTop: el.styles.marginTop,
+            marginBottom: el.styles.marginBottom,
           }}
         />
       );
@@ -720,7 +805,7 @@ function RenderElement({
         <div
           style={{
             pointerEvents: "none",
-            width: "100%",
+            width: el.styles.width || "100%",
             height: el.styles.height || "48px",
             background:
               "repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(148,163,184,0.15) 4px, rgba(148,163,184,0.15) 8px)",
@@ -732,8 +817,11 @@ function RenderElement({
         <ul
           style={{
             pointerEvents: "none",
-            paddingLeft: 20,
+            paddingLeft: el.styles.paddingLeft || "20px",
             listStyleType: el.styles.listStyleType || "disc",
+            fontSize: el.styles.fontSize,
+            color: el.styles.color,
+            lineHeight: el.styles.lineHeight,
           }}
         >
           {(el.listItems || ["Item 1", "Item 2"]).map((item, i) => (
@@ -746,8 +834,11 @@ function RenderElement({
         <ol
           style={{
             pointerEvents: "none",
-            paddingLeft: 20,
+            paddingLeft: el.styles.paddingLeft || "20px",
             listStyleType: el.styles.listStyleType || "decimal",
+            fontSize: el.styles.fontSize,
+            color: el.styles.color,
+            lineHeight: el.styles.lineHeight,
           }}
         >
           {(el.listItems || ["Item 1", "Item 2"]).map((item, i) => (
@@ -756,7 +847,7 @@ function RenderElement({
         </ol>
       );
     if (el.type === "table") {
-      const td = (el as any).tableData || {
+      const td = el.tableData || {
         headers: ["H1", "H2", "H3"],
         rows: [
           ["", "", ""],
@@ -848,7 +939,12 @@ function RenderElement({
             gap: 8,
           }}
         >
-          <input type="radio" readOnly style={{ pointerEvents: "none" }} />
+          <input
+            type="radio"
+            readOnly
+            name={el.fieldName || undefined}
+            style={{ pointerEvents: "none" }}
+          />
           <span>{el.content || "Option"}</span>
         </label>
       );
@@ -910,10 +1006,143 @@ function RenderElement({
       );
     if (el.type === "badge")
       return (
-        <span style={{ pointerEvents: "none", display: "inline-block" }}>
+        <span
+          style={{
+            pointerEvents: "none",
+            display: el.styles.display || "inline-block",
+            backgroundColor: el.styles.backgroundColor,
+            color: el.styles.color,
+            fontSize: el.styles.fontSize,
+            fontWeight: el.styles.fontWeight,
+            padding: el.styles.padding,
+            borderRadius: el.styles.borderRadius,
+          }}
+        >
           {el.content || "Badge"}
         </span>
       );
+    if (el.type === "time")
+      return (
+        <time
+          dateTime={el.dateTime}
+          style={{
+            pointerEvents: "none",
+            fontSize: el.styles.fontSize,
+            color: el.styles.color,
+            ...(el.styles as any),
+          }}
+        >
+          {el.content || "January 1, 2025"}
+        </time>
+      );
+    if (el.type === "progress")
+      return (
+        <div style={{ pointerEvents: "none", width: "100%" }}>
+          <progress
+            value={el.progressValue ?? 60}
+            max={el.progressMax ?? 100}
+            style={{ width: "100%", height: el.styles.height || "8px" }}
+          />
+        </div>
+      );
+    if (el.type === "meter")
+      return (
+        <div style={{ pointerEvents: "none", width: "100%" }}>
+          <meter
+            value={el.progressValue ?? 0.6}
+            min={0}
+            max={el.progressMax ?? 1}
+            style={{ width: "100%", height: el.styles.height || "20px" }}
+          />
+        </div>
+      );
+    if (el.type === "details")
+      return (
+        <div style={{ pointerEvents: "none" }}>
+          <details open={!!el.open}>
+            <summary style={{ cursor: "pointer", fontWeight: 500 }}>
+              {el.content || "Click to expand"}
+            </summary>
+            <div style={{ paddingTop: 8, color: "#6b7280", fontSize: 14 }}>
+              Content goes here.
+            </div>
+          </details>
+        </div>
+      );
+    if (el.type === "alert") {
+      const variantColors: Record<
+        string,
+        { bg: string; border: string; color: string; icon: string }
+      > = {
+        info: { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", icon: "ℹ" },
+        success: {
+          bg: "#f0fdf4",
+          border: "#bbf7d0",
+          color: "#15803d",
+          icon: "✓",
+        },
+        warning: {
+          bg: "#fffbeb",
+          border: "#fde68a",
+          color: "#b45309",
+          icon: "⚠",
+        },
+        error: {
+          bg: "#fef2f2",
+          border: "#fecaca",
+          color: "#b91c1c",
+          icon: "✕",
+        },
+      };
+      const v = variantColors[el.alertVariant || "info"];
+      return (
+        <div
+          style={{
+            pointerEvents: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            backgroundColor: v.bg,
+            border: `1px solid ${v.border}`,
+            color: v.color,
+            padding: "12px 16px",
+            borderRadius: 8,
+            fontSize: 14,
+          }}
+        >
+          <span style={{ fontWeight: 700, flexShrink: 0 }}>{v.icon}</span>
+          <span>{el.content || "This is an alert message."}</span>
+        </div>
+      );
+    }
+    if (el.type === "avatar") {
+      if (el.avatarSrc)
+        return (
+          <img
+            src={el.avatarSrc}
+            alt={el.avatarInitials || "avatar"}
+            style={{
+              pointerEvents: "none",
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              borderRadius: "9999px",
+              display: "block",
+            }}
+          />
+        );
+      return (
+        <span
+          style={{
+            pointerEvents: "none",
+            fontSize: el.styles.fontSize || "16px",
+            fontWeight: 600,
+          }}
+        >
+          {el.avatarInitials || "AB"}
+        </span>
+      );
+    }
     if (el.type === "icon") {
       const name = el.iconName || "Sparkles";
       const normalized = name
@@ -935,21 +1164,121 @@ function RenderElement({
     }
     if (el.type === "code")
       return (
-        <code style={{ pointerEvents: "none", display: "inline-block" }}>
-          {el.content || "code"}
+        <code
+          style={{
+            pointerEvents: "none",
+            display: "inline-block",
+            fontFamily:
+              "'JetBrains Mono','Fira Code','Cascadia Code',monospace",
+            fontSize: el.styles.fontSize || "13px",
+            backgroundColor: el.styles.backgroundColor || "#1e1e2e",
+            color: el.styles.color || "#cdd6f4",
+            padding: el.styles.padding || "2px 8px",
+            borderRadius: el.styles.borderRadius || "4px",
+            ...(el.styles as any),
+          }}
+        >
+          {el.content || "const hello = 'world';"}
         </code>
       );
-    if (el.type === "pre")
+    if (el.type === "pre") {
+      const code = el.content || "// code block\nconst x = 1;\nconsole.log(x);";
       return (
-        <pre style={{ pointerEvents: "none", margin: 0 }}>
-          {el.content || "// code"}
-        </pre>
+        <div
+          style={{
+            pointerEvents: "none",
+            position: "relative",
+            borderRadius: el.styles.borderRadius || "8px",
+            overflow: "hidden",
+          }}
+        >
+          <button
+            style={{
+              pointerEvents: "auto",
+              position: "absolute",
+              top: 10,
+              right: 10,
+              zIndex: 10,
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: 6,
+              color: "#fff",
+              fontSize: 11,
+              padding: "3px 9px",
+              cursor: "pointer",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(code);
+            }}
+          >
+            Copy
+          </button>
+          <SyntaxHighlighter
+            language="typescript"
+            style={vscDarkPlus}
+            customStyle={{
+              margin: 0,
+              borderRadius: el.styles.borderRadius || "8px",
+              fontSize: el.styles.fontSize || "13px",
+              lineHeight: el.styles.lineHeight || "1.7",
+            }}
+          >
+            {code}
+          </SyntaxHighlighter>
+        </div>
       );
+    }
     if (el.type === "blockquote")
       return (
-        <blockquote style={{ pointerEvents: "none", margin: 0 }}>
-          {el.content || "Quote"}
+        <blockquote
+          style={{
+            pointerEvents: "none",
+            margin: 0,
+            borderLeft: el.styles.borderLeft || "4px solid #3b82f6",
+            paddingLeft: el.styles.paddingLeft || "16px",
+            color: el.styles.color || "#4b5563",
+            fontStyle: el.styles.fontStyle || "italic",
+            fontSize: el.styles.fontSize || "16px",
+            ...(el.styles as any),
+          }}
+        >
+          {el.content || "A quote worth remembering."}
         </blockquote>
+      );
+    if (el.type === "mark")
+      return (
+        <mark
+          style={{
+            pointerEvents: "none",
+            backgroundColor: el.styles.backgroundColor || "#fef08a",
+            color: el.styles.color || "#111827",
+            padding: el.styles.padding || "0 2px",
+            borderRadius: el.styles.borderRadius || "2px",
+            ...(el.styles as any),
+          }}
+        >
+          {el.content || "highlighted text"}
+        </mark>
+      );
+    if (el.type === "kbd")
+      return (
+        <kbd
+          style={{
+            pointerEvents: "none",
+            fontFamily: "monospace",
+            fontSize: el.styles.fontSize || "12px",
+            backgroundColor: el.styles.backgroundColor || "#f3f4f6",
+            color: el.styles.color || "#111827",
+            padding: el.styles.padding || "2px 6px",
+            borderRadius: el.styles.borderRadius || "4px",
+            border: (el.styles as any).border || "1px solid #d1d5db",
+            display: "inline-block",
+            ...(el.styles as any),
+          }}
+        >
+          {el.content || "⌘K"}
+        </kbd>
       );
 
     return (
@@ -1066,53 +1395,6 @@ function RenderElement({
           {el.type}
         </div>
       )}
-      {/* Lock badge */}
-      {isLocked && isAnySelected && (
-        <div
-          style={{
-            position: "absolute",
-            top: -20,
-            right: 0,
-            fontSize: 9,
-            color: "#f59e0b",
-            background: "rgba(245,158,11,0.12)",
-            padding: "2px 6px",
-            borderRadius: 3,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-            zIndex: 10,
-            display: "flex",
-            alignItems: "center",
-            gap: 3,
-          }}
-        >
-          🔒 Locked · Press L to unlock
-        </div>
-      )}
-      {/* Hidden badge */}
-      {isHidden && isAnySelected && (
-        <div
-          style={{
-            position: "absolute",
-            top: -20,
-            left: isLocked ? undefined : 0,
-            right: isLocked ? 80 : undefined,
-            fontSize: 9,
-            color: "#94a3b8",
-            background: "rgba(148,163,184,0.1)",
-            padding: "2px 6px",
-            borderRadius: 3,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-            zIndex: 10,
-            display: "flex",
-            alignItems: "center",
-            gap: 3,
-          }}
-        >
-          👁 Hidden · Press H to show
-        </div>
-      )}
       {renderContent()}
     </>,
   );
@@ -1195,6 +1477,13 @@ export default function Canvas() {
     editingElementId,
     setEditingElement,
   } = useBuilderStore();
+
+  // Fix 6: subscribe directly to past/future lengths so these booleans are
+  // always fresh — calling canUndo() inside a useEffect closure captures a
+  // stale reference and misses history updates after the effect was created.
+  const undoable = useBuilderStore((s) => s.past.length > 0);
+  const redoable = useBuilderStore((s) => s.future.length > 0);
+
   const page = getActivePage();
 
   const handleStartEdit = useCallback(
@@ -1298,17 +1587,16 @@ export default function Canvas() {
       // ── Ctrl/Cmd+Z  Undo ──────────────────────────────────────────────────
       if (cmd && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
-        if (canUndo()) {
+        if (undoable) {
           undo();
           showToast("Undo");
         }
         return;
       }
 
-      // ── Ctrl/Cmd+Shift+Z  or  Ctrl+Y  Redo ───────────────────────────────
       if ((cmd && e.shiftKey && e.key === "z") || (cmd && e.key === "y")) {
         e.preventDefault();
-        if (canRedo()) {
+        if (redoable) {
           redo();
           showToast("Redo");
         }
@@ -1463,8 +1751,8 @@ export default function Canvas() {
     updateElement,
     undo,
     redo,
-    canUndo,
-    canRedo,
+    undoable,
+    redoable,
     toggleSelectElement,
     getActivePage,
     showToast,
@@ -1559,7 +1847,7 @@ export default function Canvas() {
   return (
     <div
       className="flex-1 overflow-y-auto bg-[#0a0a0a]"
-      style={{ padding: "40px 40px 80px" }}
+      style={{ padding: "38px" }}
       onClick={handleCanvasClick}
     >
       <HoverActiveStyleSheet />
@@ -1618,7 +1906,7 @@ export default function Canvas() {
       <div
         style={{
           width: "100%",
-          maxWidth: 1200,
+          maxWidth: 1600,
           margin: "0 auto",
           backgroundColor: hasElements ? "#ffffff" : "transparent",
           boxShadow: hasElements ? "0 8px 60px rgba(0,0,0,0.55)" : "none",

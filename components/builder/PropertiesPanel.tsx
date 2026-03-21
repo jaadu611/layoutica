@@ -572,17 +572,22 @@ function ElementHeader({
   );
 }
 
+// ─── State Selector ───────────────────────────────────────────────────────────
 const STYLING_STATES = ["default", "hover", "active", "focus"] as const;
 type StylingStateTab = (typeof STYLING_STATES)[number];
 function StateSelectorBar({
   current,
   onChange,
+  onReset,
+  hasOverrides,
 }: {
   current: StylingStateTab;
   onChange: (s: StylingStateTab) => void;
+  onReset: () => void;
+  hasOverrides: boolean;
 }) {
   return (
-    <div className="flex gap-1 px-3 py-2 border-b border-[#383838] bg-[#272727] shrink-0">
+    <div className="flex items-center gap-1 px-3 py-2 border-b border-[#383838] bg-[#272727] shrink-0">
       {STYLING_STATES.map((s) => (
         <button
           key={s}
@@ -593,6 +598,16 @@ function StateSelectorBar({
           {s}
         </button>
       ))}
+      {current !== "default" && (
+        <button
+          type="button"
+          onClick={onReset}
+          title={`Clear all ${current} styles`}
+          className={`ml-1 px-1.5 py-1 rounded text-[9px] font-bold transition-all cursor-pointer ${hasOverrides ? "text-red-400/70 hover:text-red-400 hover:bg-red-500/10" : "text-white/15 cursor-default"}`}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -612,6 +627,8 @@ export default function PropertiesPanel() {
     if (!panelRef.current) return;
     if (el && el.id !== prevElId.current) {
       prevElId.current = el.id;
+      // Fix 4: reset to Default tab whenever a different element is selected
+      setStylingState("default");
       gsap.fromTo(
         panelRef.current,
         { opacity: 0, x: 8 },
@@ -649,11 +666,31 @@ export default function PropertiesPanel() {
   const update = (key: string, value: any) =>
     updateElement(el.id, { [key]: value } as any);
 
+  // Check whether the current non-default tab has any overrides set
+  const hasOverrides = (() => {
+    if (stylingState === "hover")
+      return Object.keys(el.hoverStyles ?? {}).length > 0;
+    if (stylingState === "active")
+      return Object.keys(el.activeStyles ?? {}).length > 0;
+    if (stylingState === "focus")
+      return Object.keys(el.focusStyles ?? {}).length > 0;
+    return false;
+  })();
+
+  // Fix 3: clear all styles for the current non-default tab
+  const resetStateStyles = () => {
+    if (stylingState === "hover") updateElement(el.id, { hoverStyles: {} });
+    else if (stylingState === "active")
+      updateElement(el.id, { activeStyles: {} });
+    else if (stylingState === "focus")
+      updateElement(el.id, { focusStyles: {} });
+  };
+
   // Read value from the correct style bucket for the active tab
   const gsv = (key: keyof StyleProps): any => {
-    if (stylingState === "hover") return (el.hoverStyles as any)?.[key];
-    if (stylingState === "active") return (el.activeStyles as any)?.[key];
-    if (stylingState === "focus") return (el as any).focusStyles?.[key];
+    if (stylingState === "hover") return el.hoverStyles?.[key];
+    if (stylingState === "active") return el.activeStyles?.[key];
+    if (stylingState === "focus") return el.focusStyles?.[key];
     return (el.styles as any)[key];
   };
 
@@ -751,6 +788,8 @@ export default function PropertiesPanel() {
       <StateSelectorBar
         current={stylingState as StylingStateTab}
         onChange={(s) => setStylingState(s)}
+        onReset={resetStateStyles}
+        hasOverrides={hasOverrides}
       />
 
       <div ref={panelRef} className="flex-1 overflow-y-auto px-3">
@@ -959,14 +998,14 @@ export default function PropertiesPanel() {
           <Section title="Form">
             <Field label="Action URL">
               <Input
-                value={(el as any).formAction || ""}
+                value={el.formAction || ""}
                 onChange={(v) => update("formAction", v)}
                 placeholder="/api/submit"
               />
             </Field>
             <Field label="Method">
               <Select
-                value={(el as any).formMethod || "post"}
+                value={el.formMethod || "post"}
                 onChange={(v) => update("formMethod", v)}
                 options={[
                   { value: "post", label: "POST" },
@@ -976,9 +1015,7 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Encoding">
               <Select
-                value={
-                  (el as any).formEnctype || "application/x-www-form-urlencoded"
-                }
+                value={el.formEnctype || "application/x-www-form-urlencoded"}
                 onChange={(v) => update("formEnctype", v)}
                 options={[
                   {
@@ -1043,14 +1080,14 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Field Name">
               <Input
-                value={(el as any).fieldName || ""}
+                value={el.fieldName || ""}
                 onChange={(v) => update("fieldName", v)}
                 placeholder="email, name, phone…"
               />
             </Field>
             <Field label="Input Type">
               <Select
-                value={(el as any).inputType || "text"}
+                value={el.inputType || "text"}
                 onChange={(v) => update("inputType", v)}
                 options={[
                   { value: "text", label: "Text" },
@@ -1077,7 +1114,7 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Field Name">
               <Input
-                value={(el as any).fieldName || ""}
+                value={el.fieldName || ""}
                 onChange={(v) => update("fieldName", v)}
                 placeholder="message, bio…"
               />
@@ -1118,7 +1155,7 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Field Name">
               <Input
-                value={(el as any).fieldName || ""}
+                value={el.fieldName || ""}
                 onChange={(v) => update("fieldName", v)}
                 placeholder="agree, subscribe…"
               />
@@ -1145,9 +1182,156 @@ export default function PropertiesPanel() {
             </Field>
             <Field label="Group Name">
               <Input
-                value={(el as any).fieldName || ""}
+                value={el.fieldName || ""}
                 onChange={(v) => update("fieldName", v)}
                 placeholder="plan, gender…"
+              />
+            </Field>
+          </Section>
+        )}
+        {el.type === "time" && (
+          <Section title="Time">
+            <Field label="Display Text">
+              <Input
+                value={el.content || ""}
+                onChange={(v) => update("content", v)}
+                placeholder="January 1, 2025"
+              />
+            </Field>
+            <Field label="datetime attr">
+              <Input
+                value={el.dateTime || ""}
+                onChange={(v) => update("dateTime", v)}
+                placeholder="2025-01-01"
+              />
+            </Field>
+          </Section>
+        )}
+        {el.type === "mark" && (
+          <Section title="Highlight">
+            <Field label="Text">
+              <Input
+                value={el.content || ""}
+                onChange={(v) => update("content", v)}
+                placeholder="highlighted text"
+              />
+            </Field>
+          </Section>
+        )}
+        {el.type === "kbd" && (
+          <Section title="Keyboard">
+            <Field label="Keys">
+              <Input
+                value={el.content || ""}
+                onChange={(v) => update("content", v)}
+                placeholder="⌘K"
+              />
+            </Field>
+          </Section>
+        )}
+        {el.type === "progress" && (
+          <Section title="Progress">
+            <Row>
+              <Field label="Value">
+                <Input
+                  type="number"
+                  value={String(el.progressValue ?? 60)}
+                  onChange={(v) => update("progressValue", Number(v))}
+                  placeholder="60"
+                />
+              </Field>
+              <Field label="Max">
+                <Input
+                  type="number"
+                  value={String(el.progressMax ?? 100)}
+                  onChange={(v) => update("progressMax", Number(v))}
+                  placeholder="100"
+                />
+              </Field>
+            </Row>
+          </Section>
+        )}
+        {el.type === "meter" && (
+          <Section title="Meter">
+            <Row>
+              <Field label="Value">
+                <Input
+                  type="number"
+                  value={String(el.progressValue ?? 0.6)}
+                  onChange={(v) => update("progressValue", Number(v))}
+                  placeholder="0.6"
+                />
+              </Field>
+              <Field label="Max">
+                <Input
+                  type="number"
+                  value={String(el.progressMax ?? 1)}
+                  onChange={(v) => update("progressMax", Number(v))}
+                  placeholder="1"
+                />
+              </Field>
+            </Row>
+          </Section>
+        )}
+        {el.type === "details" && (
+          <Section title="Details">
+            <Field label="Summary">
+              <Input
+                value={el.content || ""}
+                onChange={(v) => update("content", v)}
+                placeholder="Click to expand"
+              />
+            </Field>
+            <div className="flex items-center justify-between px-1">
+              <Label>Open by default</Label>
+              <button
+                onClick={() => update("open", !el.open)}
+                className={`w-8 h-4 rounded-full transition-colors relative ${el.open ? "bg-blue-500" : "bg-white/10"}`}
+              >
+                <div
+                  className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${el.open ? "left-4.5" : "left-0.5"}`}
+                />
+              </button>
+            </div>
+          </Section>
+        )}
+        {el.type === "alert" && (
+          <Section title="Alert">
+            <Field label="Message">
+              <Input
+                value={el.content || ""}
+                onChange={(v) => update("content", v)}
+                placeholder="Alert message…"
+              />
+            </Field>
+            <Field label="Variant">
+              <Select
+                value={el.alertVariant || "info"}
+                onChange={(v) => update("alertVariant", v)}
+                options={[
+                  { value: "info", label: "Info" },
+                  { value: "success", label: "Success" },
+                  { value: "warning", label: "Warning" },
+                  { value: "error", label: "Error" },
+                ]}
+              />
+            </Field>
+          </Section>
+        )}
+        {el.type === "avatar" && (
+          <Section title="Avatar">
+            <Field label="Image URL">
+              <Input
+                value={el.avatarSrc || ""}
+                onChange={(v) => update("avatarSrc", v)}
+                placeholder="https://…"
+              />
+            </Field>
+            <Field label="Initials">
+              <Input
+                value={el.avatarInitials || ""}
+                onChange={(v) => update("avatarInitials", v)}
+                placeholder="AB"
               />
             </Field>
           </Section>
@@ -1155,7 +1339,7 @@ export default function PropertiesPanel() {
         {el.type === "table" && (
           <Section title="Table">
             {(() => {
-              const td = (el as any).tableData || {
+              const td = el.tableData || {
                 headers: ["H1", "H2", "H3"],
                 rows: [
                   ["", "", ""],
@@ -1163,7 +1347,7 @@ export default function PropertiesPanel() {
                 ],
               };
               const setTd = (next: any) =>
-                updateElement(el.id, { tableData: next } as any);
+                updateElement(el.id, { tableData: next });
               return (
                 <div className="space-y-4">
                   <div className="space-y-3 p-3 bg-white/5 rounded-lg border border-white/5">

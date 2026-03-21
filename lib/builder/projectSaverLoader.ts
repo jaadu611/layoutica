@@ -27,23 +27,10 @@ export interface LticaProject {
   };
 }
 
-// ─── Version history ──────────────────────────────────────────────────────────
-// 1.0.0 — initial format
-// 1.1.0 — added savedComponents
-// 1.2.0 — added designTokens
-// 1.3.0 — added hoverStyles / activeStyles / focusStyles on CanvasElement
-//          added formAction / formMethod / fieldName / inputType on elements
-//          added metadata.isHidden / isLocked on CanvasElement
-
 const CURRENT_VERSION = "1.3.0";
-
-// ─── Migration ────────────────────────────────────────────────────────────────
-// Add a new branch here whenever the schema changes in a breaking way.
 
 function migrateProject(project: LticaProject): LticaProject {
   const v = project.metadata.version ?? "1.0.0";
-
-  // 1.0.0 → 1.1.0: savedComponents didn't exist
   if (!Array.isArray(project.data.savedComponents)) {
     project.data.savedComponents = [];
   }
@@ -58,7 +45,6 @@ function migrateProject(project: LticaProject): LticaProject {
       project.data.designTokens.typography = [];
   }
 
-  // 1.2.0 → 1.3.0: viewSettings may be missing
   if (!project.data.viewSettings) {
     project.data.viewSettings = {
       activePageId: project.data.pages[0]?.id ?? "",

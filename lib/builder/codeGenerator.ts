@@ -38,7 +38,25 @@ function extractFonts(elements: CanvasElement[]): Map<string, FontEntry> {
               varName: NEXT_FONT_MAP[key].toLowerCase().replace(/_/g, ""),
             });
           } else if (
-            !["inherit", "monospace", "serif", "sans-serif"].includes(key)
+            ![
+              "inherit",
+              "monospace",
+              "serif",
+              "sans-serif",
+              "cursive",
+              "fantasy",
+              "courier new",
+              "courier",
+              "consolas",
+              "menlo",
+              "monaco",
+              "lucida console",
+              "jetbrains mono",
+              "fira code",
+              "cascadia code",
+              "source code pro",
+              "inconsolata",
+            ].some((m) => key.includes(m))
           ) {
             const base = raw.replace(/['"]/g, "").split(",")[0].trim();
             fonts.set(key, {
@@ -234,17 +252,55 @@ function stylesToTailwind(
     inlineStyle.backgroundImage = `linear-gradient(${styles.gradientAngle ?? 135}deg, ${styles.gradientStartColor}, ${styles.gradientEndColor})`;
   }
 
-  // Borders — individual sides must be inline (Tailwind can't do arbitrary per-side shorthand)
+  // Borders — parse shorthand "1px solid #color" into parts for Tailwind,
+  // individual sides go inline since Tailwind can't do arbitrary per-side shorthand
   if (
+    styles.border &&
+    !styles.borderTop &&
+    !styles.borderRight &&
+    !styles.borderBottom &&
+    !styles.borderLeft
+  ) {
+    const parts = styles.border.trim().split(/\s+/);
+    const width = parts.find((p) => /^\d/.test(p)) || "";
+    const style =
+      parts.find((p) =>
+        ["solid", "dashed", "dotted", "double", "none"].includes(p),
+      ) || "";
+    const color =
+      parts.find(
+        (p) => p.startsWith("#") || p.startsWith("rgb") || p.startsWith("hsl"),
+      ) || "";
+    cls.push("border");
+    if (width && width !== "1px") cls.push(`border-[${width}]`);
+    if (style && style !== "solid") cls.push(`border-${style}`);
+    if (color) cls.push(`border-[${color}]`);
+  } else if (
     styles.borderTop ||
     styles.borderRight ||
     styles.borderBottom ||
     styles.borderLeft
   ) {
-    if (styles.borderTop) inlineStyle.borderTop = styles.borderTop;
-    if (styles.borderRight) inlineStyle.borderRight = styles.borderRight;
-    if (styles.borderBottom) inlineStyle.borderBottom = styles.borderBottom;
-    if (styles.borderLeft) inlineStyle.borderLeft = styles.borderLeft;
+    const parseSide = (val: string, side: string) => {
+      const parts = val.trim().split(/\s+/);
+      const width = parts.find((p) => /^\d/.test(p)) || "";
+      const st =
+        parts.find((p) =>
+          ["solid", "dashed", "dotted", "double", "none"].includes(p),
+        ) || "";
+      const color =
+        parts.find(
+          (p) =>
+            p.startsWith("#") || p.startsWith("rgb") || p.startsWith("hsl"),
+        ) || "";
+      if (width) cls.push(`border-${side}-[${width}]`);
+      if (st && st !== "solid") cls.push(`border-${side}-${st}`);
+      if (color) cls.push(`border-${side}-[${color}]`);
+    };
+    if (styles.borderTop) parseSide(styles.borderTop, "t");
+    if (styles.borderRight) parseSide(styles.borderRight, "r");
+    if (styles.borderBottom) parseSide(styles.borderBottom, "b");
+    if (styles.borderLeft) parseSide(styles.borderLeft, "l");
   } else if (styles.borderWidth || styles.borderStyle || styles.borderColor) {
     cls.push("border");
     if (styles.borderWidth) cls.push(`border-[${styles.borderWidth}]`);
@@ -440,7 +496,7 @@ function collectStateCSS(elements: CanvasElement[], rules: StateCSS[]) {
       el.activeStyles && Object.keys(el.activeStyles).length > 0
     );
     const hasFocus = !!(
-      (el as any).focusStyles && Object.keys((el as any).focusStyles).length > 0
+      el.focusStyles && Object.keys(el.focusStyles).length > 0
     );
 
     if (hasHover || hasActive || hasFocus) {
@@ -455,7 +511,7 @@ function collectStateCSS(elements: CanvasElement[], rules: StateCSS[]) {
         if (css) rules.push({ selector: `.${stateClass}:active`, css });
       }
       if (hasFocus) {
-        const css = styleObjToCSS((el as any).focusStyles);
+        const css = styleObjToCSS(el.focusStyles!);
         if (css) rules.push({ selector: `.${stateClass}:focus`, css });
       }
     }
@@ -529,9 +585,7 @@ function elementToJSX(
   const hasStateStyles =
     !!(el.hoverStyles && Object.keys(el.hoverStyles).length > 0) ||
     !!(el.activeStyles && Object.keys(el.activeStyles).length > 0) ||
-    !!(
-      (el as any).focusStyles && Object.keys((el as any).focusStyles).length > 0
-    );
+    !!(el.focusStyles && Object.keys(el.focusStyles).length > 0);
 
   const stateClass = hasStateStyles ? `el-${el.id}` : "";
 
@@ -546,11 +600,8 @@ function elementToJSX(
       const css = styleObjToCSS(el.activeStyles);
       if (css) stateRules.push({ selector: `.${stateClass}:active`, css });
     }
-    if (
-      (el as any).focusStyles &&
-      Object.keys((el as any).focusStyles).length > 0
-    ) {
-      const css = styleObjToCSS((el as any).focusStyles);
+    if (el.focusStyles && Object.keys(el.focusStyles).length > 0) {
+      const css = styleObjToCSS(el.focusStyles);
       if (css) stateRules.push({ selector: `.${stateClass}:focus`, css });
     }
   }
@@ -596,7 +647,7 @@ function elementToJSX(
     code: "code",
     pre: "pre",
   };
-  const tag = (el as any).htmlTag || tagMap[el.type] || "div";
+  const tag = el.htmlTag || tagMap[el.type] || "div";
 
   if (el.type === "image")
     return `${pad}<img src="${el.src || "/placeholder.jpg"}" alt="${el.alt || ""}"${clsAttr}${styAttr} />`;
@@ -613,23 +664,17 @@ function elementToJSX(
     return `${pad}<button type="button"${clsAttr}${styAttr}>\n${pad}  ${el.content || "Button"}\n${pad}</button>`;
 
   if (el.type === "input") {
-    const name = (el as any).fieldName
-      ? ` name="${(el as any).fieldName}"`
-      : "";
-    return `${pad}<input type="${(el as any).inputType || "text"}"${name} placeholder="${el.placeholder || ""}"${clsAttr}${styAttr} />`;
+    const name = el.fieldName ? ` name="${el.fieldName}"` : "";
+    return `${pad}<input type="${el.inputType || "text"}"${name} placeholder="${el.placeholder || ""}"${clsAttr}${styAttr} />`;
   }
 
   if (el.type === "textarea") {
-    const name = (el as any).fieldName
-      ? ` name="${(el as any).fieldName}"`
-      : "";
+    const name = el.fieldName ? ` name="${el.fieldName}"` : "";
     return `${pad}<textarea${name} placeholder="${el.placeholder || ""}"${clsAttr}${styAttr}></textarea>`;
   }
 
   if (el.type === "select") {
-    const name = (el as any).fieldName
-      ? ` name="${(el as any).fieldName}"`
-      : "";
+    const name = el.fieldName ? ` name="${el.fieldName}"` : "";
     const opts = (el.selectOptions || [])
       .map((o) => `${pad}    <option value="${o}">${o}</option>`)
       .join("\n");
@@ -637,30 +682,21 @@ function elementToJSX(
   }
 
   if (el.type === "checkbox") {
-    const name = (el as any).fieldName
-      ? ` name="${(el as any).fieldName}"`
-      : "";
+    const name = el.fieldName ? ` name="${el.fieldName}"` : "";
     return `${pad}<label${clsAttr}${styAttr}>\n${pad}  <input type="checkbox"${name}${el.checked ? " defaultChecked" : ""} />\n${pad}  <span>${el.content || "Label"}</span>\n${pad}</label>`;
   }
 
   if (el.type === "radio") {
-    const name = (el as any).fieldName
-      ? ` name="${(el as any).fieldName}"`
-      : "";
+    const name = el.fieldName ? ` name="${el.fieldName}"` : "";
     return `${pad}<label${clsAttr}${styAttr}>\n${pad}  <input type="radio"${name} />\n${pad}  <span>${el.content || "Option"}</span>\n${pad}</label>`;
   }
 
   if (el.type === "form") {
-    const action = (el as any).formAction
-      ? ` action="${(el as any).formAction}"`
-      : "";
-    const method = (el as any).formMethod
-      ? ` method="${(el as any).formMethod}"`
-      : "";
+    const action = el.formAction ? ` action="${el.formAction}"` : "";
+    const method = el.formMethod ? ` method="${el.formMethod}"` : "";
     const enctype =
-      (el as any).formEnctype &&
-      (el as any).formEnctype !== "application/x-www-form-urlencoded"
-        ? ` encType="${(el as any).formEnctype}"`
+      el.formEnctype && el.formEnctype !== "application/x-www-form-urlencoded"
+        ? ` encType="${el.formEnctype}"`
         : "";
     return `${pad}<form${action}${method}${enctype}${clsAttr}${styAttr}>\n${kids}\n${pad}</form>`;
   }
@@ -668,6 +704,79 @@ function elementToJSX(
   if (el.type === "divider") return `${pad}<hr${clsAttr}${styAttr} />`;
   if (el.type === "spacer")
     return `${pad}<div${clsAttr}${styAttr} aria-hidden="true" />`;
+  if (el.type === "mark")
+    return `${pad}<mark${clsAttr}${styAttr}>${el.content || "highlighted text"}</mark>`;
+  if (el.type === "kbd")
+    return `${pad}<kbd${clsAttr}${styAttr}>${el.content || "⌘K"}</kbd>`;
+  if (el.type === "time")
+    return `${pad}<time${el.dateTime ? ` dateTime="${el.dateTime}"` : ""}${clsAttr}${styAttr}>${el.content || "January 1, 2025"}</time>`;
+  if (el.type === "progress")
+    return `${pad}<progress value={${el.progressValue ?? 60}} max={${el.progressMax ?? 100}}${clsAttr}${styAttr} />`;
+  if (el.type === "meter")
+    return `${pad}<meter value={${el.progressValue ?? 0.6}} min={0} max={${el.progressMax ?? 1}}${clsAttr}${styAttr} />`;
+
+  if (el.type === "pre") {
+    const lang = "typescript";
+    const code = (el.content || "// code block\nconst x = 1;").replace(
+      /`/g,
+      "\\`",
+    );
+    return [
+      `${pad}<div style={{ position: "relative" }}>`,
+      `${pad}  <CopyButton code={\`${code}\`} />`,
+      `${pad}  <SyntaxHighlighter language="${lang}" style={vscDarkPlus} customStyle={{ borderRadius: "8px", fontSize: "13px", margin: 0 }}>`,
+      `${pad}    {\`${code}\`}`,
+      `${pad}  </SyntaxHighlighter>`,
+      `${pad}</div>`,
+    ].join("\n");
+  }
+
+  if (el.type === "details") {
+    const openAttr = el.open ? " open" : "";
+    return `${pad}<details${openAttr}${clsAttr}${styAttr}>\n${pad}  <summary className="cursor-pointer font-medium">${el.content || "Click to expand"}</summary>\n${pad}  <div className="pt-2">Content goes here.</div>\n${pad}</details>`;
+  }
+
+  if (el.type === "alert") {
+    const variantMap: Record<
+      string,
+      { bg: string; border: string; color: string; icon: string }
+    > = {
+      info: { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", icon: "ℹ" },
+      success: {
+        bg: "#f0fdf4",
+        border: "#bbf7d0",
+        color: "#15803d",
+        icon: "✓",
+      },
+      warning: {
+        bg: "#fffbeb",
+        border: "#fde68a",
+        color: "#b45309",
+        icon: "⚠",
+      },
+      error: { bg: "#fef2f2", border: "#fecaca", color: "#b91c1c", icon: "✕" },
+    };
+    const v = variantMap[el.alertVariant || "info"];
+    const alertStyle = serializeStyle({
+      ...styleWithoutTransition,
+      backgroundColor: v.bg,
+      border: `1px solid ${v.border}`,
+      color: v.color,
+    });
+    const alertStyleAttr = alertStyle ? ` style={${alertStyle}}` : "";
+    return `${pad}<div${clsAttr}${alertStyleAttr}>\n${pad}  <span style={{ fontWeight: 700, marginRight: "8px" }}>${v.icon}</span>\n${pad}  ${el.content || "This is an alert message."}\n${pad}</div>`;
+  }
+
+  if (el.type === "avatar") {
+    if (el.avatarSrc)
+      return `${pad}<img src="${el.avatarSrc}" alt="${el.avatarInitials || "avatar"}"${clsAttr}${styAttr} />`;
+    return `${pad}<div${clsAttr}${styAttr}>${el.avatarInitials || "AB"}</div>`;
+  }
+
+  if (el.type === "card" || el.type === "figure") {
+    const tag = el.type === "figure" ? "figure" : "div";
+    return `${pad}<${tag}${clsAttr}${styAttr}>\n${kids}\n${pad}</${tag}>`;
+  }
 
   if (el.type === "video")
     return `${pad}<video src="${el.videoSrc || ""}"${el.controls ? " controls" : ""}${el.autoPlay ? " autoPlay" : ""}${el.muted ? " muted" : ""}${el.loop ? " loop" : ""}${el.videoPoster ? ` poster="${el.videoPoster}"` : ""}${clsAttr}${styAttr} />`;
@@ -693,22 +802,52 @@ function elementToJSX(
   }
 
   if (el.type === "icon") {
-    const iconName = (el as any).iconName || "Star";
+    const iconName = el.iconName || "Star";
     return `${pad}{/* Icon: ${iconName} — import { ${iconName} } from "lucide-react" */}\n${pad}<span${clsAttr}${styAttr} aria-hidden="true" />`;
   }
 
   if (el.type === "table") {
-    const td = (el as any).tableData || { headers: [], rows: [] };
+    const td = el.tableData || { headers: [], rows: [] };
+    const cellPad = el.styles.tableCellPadding || "8px 12px";
+    const headerBg = el.styles.tableHeaderBackground || "#f9fafb";
+    const stripe = el.styles.tableStripe;
+    const borderCollapse = el.styles.borderCollapse || "collapse";
+    const cellBorder = "1px solid #e5e7eb";
+
+    const thStyle = `{{ padding: "${cellPad}", background: "${headerBg}", border: "${cellBorder}", textAlign: "left" as const, fontWeight: 600 }}`;
     const ths = td.headers
-      .map((h: string) => `${pad}      <th>${h}</th>`)
+      .map((h: string) => `${pad}      <th style=${thStyle}>${h}</th>`)
       .join("\n");
+
     const trs = td.rows
-      .map(
-        (row: string[]) =>
-          `${pad}    <tr>\n${row.map((c: string) => `${pad}      <td>${c}</td>`).join("\n")}\n${pad}    </tr>`,
-      )
+      .map((row: string[], ri: number) => {
+        const rowBg = stripe && ri % 2 === 1 ? `, background: "#f9fafb"` : "";
+        const tdStyle = `{{ padding: "${cellPad}", border: "${cellBorder}"${rowBg} }}`;
+        const tds = row
+          .map((c: string) => `${pad}      <td style=${tdStyle}>${c}</td>`)
+          .join("\n");
+        return `${pad}    <tr>\n${tds}\n${pad}    </tr>`;
+      })
       .join("\n");
-    return `${pad}<table${clsAttr}${styAttr}>\n${pad}  <thead>\n${pad}    <tr>\n${ths}\n${pad}    </tr>\n${pad}  </thead>\n${pad}  <tbody>\n${trs}\n${pad}  </tbody>\n${pad}</table>`;
+
+    const tableStyleStr = serializeStyle({
+      ...styleWithoutTransition,
+      borderCollapse,
+    });
+    const tableStyleAttr = tableStyleStr ? ` style={${tableStyleStr}}` : "";
+
+    return [
+      `${pad}<table${clsAttr}${tableStyleAttr}>`,
+      `${pad}  <thead>`,
+      `${pad}    <tr>`,
+      ths,
+      `${pad}    </tr>`,
+      `${pad}  </thead>`,
+      `${pad}  <tbody>`,
+      trs,
+      `${pad}  </tbody>`,
+      `${pad}</table>`,
+    ].join("\n");
   }
 
   if (el.type === "navbar") {
@@ -724,19 +863,46 @@ function elementToJSX(
 
 // ─── File generators ──────────────────────────────────────────────────────────
 
+function hasPre(elements: CanvasElement[]): boolean {
+  for (const el of elements) {
+    if (el.type === "pre") return true;
+    if (el.children && hasPre(el.children)) return true;
+  }
+  return false;
+}
+
+const COPY_BUTTON_COMPONENT = `
+function CopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = React.useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      style={{ position: "absolute", top: "10px", right: "10px", zIndex: 10, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", fontSize: "12px", padding: "4px 10px", cursor: "pointer" }}
+    >
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}`;
+
+const SYNTAX_HIGHLIGHTER_IMPORT = `import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";`;
+
 function generateComponentFile(name: string, element: CanvasElement): string {
   const usedFonts = extractFonts([element]);
   const fontImports = generateFontImports(usedFonts);
   const fontInits = generateFontInits(usedFonts);
   const stateRules: StateCSS[] = [];
   const jsx = elementToJSX(element, usedFonts, 4, new Map(), stateRules);
+  const needsSyntax = hasPre([element]);
   const styleBlock = stateRules.length
     ? `\n      <style>{\`\n${stateRules.map(({ selector, css }) => `${selector} {\n${css}\n}`).join("\n\n")}\n      \`}</style>`
     : "";
   return [
     `import React from 'react';`,
+    needsSyntax ? SYNTAX_HIGHLIGHTER_IMPORT : "",
     fontImports.trimEnd(),
     fontInits ? `\n${fontInits.trimEnd()}\n` : "",
+    needsSyntax ? COPY_BUTTON_COMPONENT : "",
     `export default function ${name}() {`,
     `  return (`,
     `    <>`,
@@ -759,6 +925,7 @@ export function generatePageCode(
   const fontImports = generateFontImports(usedFonts);
   const fontInits = generateFontInits(usedFonts);
   const stateRules: StateCSS[] = [];
+  const needsSyntax = hasPre(page.elements);
 
   const usedComps = new Set<string>();
   const walkImports = (el: CanvasElement) => {
@@ -782,8 +949,10 @@ export function generatePageCode(
   return [
     `import React from 'react';`,
     ...importLines,
+    needsSyntax ? SYNTAX_HIGHLIGHTER_IMPORT : "",
     fontImports.trimEnd(),
     fontInits ? `\n${fontInits.trimEnd()}\n` : "",
+    needsSyntax ? COPY_BUTTON_COMPONENT : "",
     `export default function ${pageName}Page() {`,
     `  return (`,
     `    <main className="w-full min-h-screen overflow-x-hidden">`,

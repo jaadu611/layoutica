@@ -25,12 +25,13 @@ export default function Toolbar() {
     activePageId,
     undo,
     redo,
-    canUndo,
-    canRedo,
     getActivePage,
     loadProject,
     setActivePage,
   } = useBuilderStore();
+
+  const undoable = useBuilderStore((s) => s.past.length > 0);
+  const redoable = useBuilderStore((s) => s.future.length > 0);
 
   const [projectName, setProjectName] = useState("untitled-project");
   const [showExport, setShowExport] = useState(false);
@@ -42,10 +43,6 @@ export default function Toolbar() {
     const files = generateAllPages(pages, components);
     setExportFiles(files);
     setShowExport(true);
-  };
-
-  const handlePreview = () => {
-    setShowPreview(true);
   };
 
   const handleSaveProject = () => {
@@ -61,20 +58,17 @@ export default function Toolbar() {
   const handleLoadProject = async () => {
     try {
       const project = await ProjectSaverLoader.load();
-
       loadProject(
         project.data.pages,
         project.data.savedComponents,
         project.data.designTokens,
       );
-
       setProjectName(project.metadata.name);
-
       if (project.data.viewSettings?.activePageId) {
         setActivePage(project.data.viewSettings.activePageId);
       }
     } catch (err) {
-      console.error(err);
+      if (err !== "cancelled") console.error(err);
     }
   };
 
@@ -109,13 +103,15 @@ export default function Toolbar() {
           <div className="flex items-center gap-1 border-r border-[#444] pr-4 mr-4">
             <button
               onClick={handleSaveProject}
-              className="flex items-center justify-center w-8 h-8 rounded text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
+              title="Save project (.ltica)"
+              className="flex items-center justify-center w-8 h-8 rounded text-white/60 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
             >
               <Save size={16} />
             </button>
             <button
               onClick={handleLoadProject}
-              className="flex items-center justify-center w-8 h-8 rounded text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
+              title="Load project (.ltica)"
+              className="flex items-center justify-center w-8 h-8 rounded text-white/60 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
             >
               <FolderOpen size={16} />
             </button>
@@ -123,10 +119,11 @@ export default function Toolbar() {
 
           <div className="flex items-center gap-1">
             <button
-              onClick={() => canUndo() && undo()}
-              disabled={!canUndo()}
+              onClick={() => undoable && undo()}
+              disabled={!undoable}
+              title="Undo (⌘Z)"
               className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${
-                canUndo()
+                undoable
                   ? "text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
                   : "text-white/20 cursor-not-allowed"
               }`}
@@ -134,10 +131,11 @@ export default function Toolbar() {
               <Undo2 size={16} strokeWidth={2} />
             </button>
             <button
-              onClick={() => canRedo() && redo()}
-              disabled={!canRedo()}
+              onClick={() => redoable && redo()}
+              disabled={!redoable}
+              title="Redo (⌘Y)"
               className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${
-                canRedo()
+                redoable
                   ? "text-white/60 hover:text-white hover:bg-white/10 cursor-pointer"
                   : "text-white/20 cursor-not-allowed"
               }`}
@@ -149,7 +147,7 @@ export default function Toolbar() {
 
         <div className="flex items-center justify-end w-1/3 gap-2">
           <button
-            onClick={handlePreview}
+            onClick={() => setShowPreview(true)}
             className="flex items-center gap-1.5 text-[12px] font-medium text-white/70 hover:text-white/90 hover:bg-white/8 px-3 py-1.5 rounded transition-colors cursor-pointer"
           >
             <Play size={12} fill="currentColor" />
@@ -157,7 +155,12 @@ export default function Toolbar() {
           </button>
           <button
             onClick={() => setShowTokens((v) => !v)}
-            className={`flex items-center justify-center w-8 h-8 rounded transition-colors cursor-pointer ${showTokens ? "bg-white/12 text-white" : "text-white/50 hover:text-white hover:bg-white/8"}`}
+            title="Design tokens"
+            className={`flex items-center justify-center w-8 h-8 rounded transition-colors cursor-pointer ${
+              showTokens
+                ? "bg-white/12 text-white"
+                : "text-white/50 hover:text-white hover:bg-white/8"
+            }`}
           >
             <Palette size={15} />
           </button>

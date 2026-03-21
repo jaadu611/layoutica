@@ -43,10 +43,7 @@ function deepCloneForInsert(
   el: CanvasElement,
   savedComponentId: string,
 ): CanvasElement {
-  return {
-    ...deepCloneWithNewIds(el),
-    savedComponentId,
-  };
+  return { ...deepCloneWithNewIds(el), savedComponentId };
 }
 
 const defaultPage: Page = {
@@ -162,6 +159,28 @@ function snap(pages: Page[], activePageId: string): HistoryEntry {
   return { pages: JSON.parse(JSON.stringify(pages)), activePageId };
 }
 
+// ─── Undo debounce ────────────────────────────────────────────────────────────
+// Without this, every keystroke in an input pushes a history entry.
+// We batch rapid style/content changes into a single snapshot by only
+// committing the history entry after 400ms of inactivity.
+
+let _historyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let _pendingSnap: HistoryEntry | null = null;
+
+function scheduleHistoryCommit(
+  currentSnap: HistoryEntry,
+  commitFn: (snap: HistoryEntry) => void,
+) {
+  if (!_pendingSnap) _pendingSnap = currentSnap;
+  if (_historyDebounceTimer) clearTimeout(_historyDebounceTimer);
+  _historyDebounceTimer = setTimeout(() => {
+    if (_pendingSnap) {
+      commitFn(_pendingSnap);
+      _pendingSnap = null;
+    }
+  }, 400);
+}
+
 export const useBuilderStore = create<BuilderState>((set, get) => ({
   pages: [defaultPage],
   activePageId: "page-1",
@@ -172,13 +191,24 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   past: [],
   future: [],
   components: loadComponents(),
-  designTokens: {
-    colors: [],
-    typography: [],
-  },
+  designTokens: { colors: [], typography: [] },
   selectedElementIds: [],
+  rightPanelCollapsed: true,
+  leftSidebarCollapsed: false,
 
   undo: () => {
+    if (_historyDebounceTimer) {
+      clearTimeout(_historyDebounceTimer);
+      _historyDebounceTimer = null;
+    }
+    if (_pendingSnap) {
+      const { pages, activePageId, future } = get();
+      set((s) => ({
+        past: [...s.past, _pendingSnap!].slice(-MAX_HISTORY),
+        future: [snap(pages, activePageId), ...future].slice(0, MAX_HISTORY),
+      }));
+      _pendingSnap = null;
+    }
     const { past, pages, activePageId, future } = get();
     if (past.length === 0) return;
     const prev = past[past.length - 1];
@@ -214,7 +244,6 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       ...(selectedElementId ? [selectedElementId] : []),
       ...selectedElementIds,
     ].filter((v, i, a) => a.indexOf(v) === i);
-
     if (current.includes(id)) {
       set({ selectedElementIds: current.filter((v) => v !== id) });
     } else {
@@ -224,7 +253,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
 
   clearSelection: () => set({ selectedElementIds: [] }),
 
-  canUndo: () => get().past.length > 0,
+  canUndo: () => get().past.length > 0 || _pendingSnap !== null,
   canRedo: () => get().future.length > 0,
 
   addPage: (name: string) => {
@@ -246,14 +275,12 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   addElement: (element, parentId, targetIndex) => {
     const { pages, activePageId, past } = get();
     const newEl: CanvasElement = { ...element, id: `el-${generateId()}` };
-
     const insertIntoArray = (arr: CanvasElement[]) => {
       const newArr = [...(arr || [])];
       const index = targetIndex !== undefined ? targetIndex : newArr.length;
       newArr.splice(index, 0, newEl);
       return newArr;
     };
-
     set({
       pages: pages.map((p) => {
         if (p.id !== activePageId) return p;
@@ -293,36 +320,74 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     const activePage = pages.find((p) => p.id === activePageId);
     if (!activePage) return;
 
+    // Find the source element's current parent so we can adjust the insert
+    // index when source and target share the same parent. Removing the source
+    // first shifts all subsequent siblings down by 1, so if the source was
+    // before the target in the same list we need to subtract 1 from targetIndex.
     let movedElement: CanvasElement | null = null;
+    let sourceParentId: string | undefined = undefined;
+    let sourceIndex = -1;
+
+    const findSource = (
+      elements: CanvasElement[],
+      parentId: string | undefined,
+    ) => {
+      elements.forEach((el, idx) => {
+        if (el.id === sourceId) {
+          movedElement = el;
+          sourceParentId = parentId;
+          sourceIndex = idx;
+        }
+        if (el.children) findSource(el.children, el.id);
+      });
+    };
+    findSource(activePage.elements, undefined);
+    if (!movedElement) return;
 
     const removeFromTree = (elements: CanvasElement[]): CanvasElement[] =>
       elements.reduce((acc, el) => {
-        if (el.id === sourceId) {
-          movedElement = el;
-          return acc;
-        }
+        if (el.id === sourceId) return acc;
         const cleanedEl = { ...el };
         if (el.children) cleanedEl.children = removeFromTree(el.children);
         return [...acc, cleanedEl];
       }, [] as CanvasElement[]);
 
     const cleanTree = removeFromTree(activePage.elements);
-    if (!movedElement) return;
+
+    // If source and target share the same parent and source was before the
+    // target position, removal shifts the target index down by 1.
+    const sameParent = sourceParentId === targetParentId;
+    let adjustedIndex = targetIndex;
+    if (
+      sameParent &&
+      adjustedIndex !== undefined &&
+      sourceIndex < adjustedIndex
+    ) {
+      adjustedIndex = adjustedIndex - 1;
+    }
 
     const insertIntoTree = (elements: CanvasElement[]): CanvasElement[] => {
       if (!targetParentId) {
         const newElements = [...elements];
         const idx =
-          targetIndex !== undefined ? targetIndex : newElements.length;
-        newElements.splice(idx, 0, movedElement!);
+          adjustedIndex !== undefined ? adjustedIndex : newElements.length;
+        newElements.splice(
+          Math.max(0, Math.min(idx, newElements.length)),
+          0,
+          movedElement!,
+        );
         return newElements;
       }
       return elements.map((el) => {
         if (el.id === targetParentId) {
           const newChildren = [...(el.children || [])];
           const idx =
-            targetIndex !== undefined ? targetIndex : newChildren.length;
-          newChildren.splice(idx, 0, movedElement!);
+            adjustedIndex !== undefined ? adjustedIndex : newChildren.length;
+          newChildren.splice(
+            Math.max(0, Math.min(idx, newChildren.length)),
+            0,
+            movedElement!,
+          );
           return { ...el, children: newChildren };
         }
         if (el.children)
@@ -369,25 +434,59 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     });
   },
 
+  // ─── updateElement ──────────────────────────────────────────────────────────
+  // FIX 1: Added `focus` state branch so focusStyles writes to el.focusStyles
+  //         instead of silently falling through to el.styles.
+  // FIX 5: Style/content changes use a debounced history commit so rapid
+  //         keystrokes (e.g. typing a font size) produce a single undo step.
+
   updateElement: (id, updates, state = "default") => {
     const { pages, activePageId, past } = get();
 
+    // When setting position:absolute on an element, ensure its parent has
+    // position:relative so top/left are relative to the parent, not the page.
+    const becomingAbsolute =
+      state === "default" &&
+      updates.styles &&
+      (updates.styles as any).position === "absolute";
+
+    const findParentId = (
+      els: CanvasElement[],
+      targetId: string,
+      parentId?: string,
+    ): string | undefined => {
+      for (const el of els) {
+        if (el.id === targetId) return parentId;
+        if (el.children) {
+          const found = findParentId(el.children, targetId, el.id);
+          if (found !== undefined) return found;
+        }
+      }
+      return undefined;
+    };
+
+    const activePage = pages.find((p) => p.id === activePageId);
+
+    // Build the updated tree with the child's position change first
     const updateInTree = (elements: CanvasElement[]): CanvasElement[] =>
       elements.map((el) => {
         if (el.id === id) {
           if (updates.styles) {
-            if (state === "hover") {
+            if (state === "hover")
               return {
                 ...el,
                 hoverStyles: { ...el.hoverStyles, ...updates.styles },
               };
-            }
-            if (state === "active") {
+            if (state === "active")
               return {
                 ...el,
                 activeStyles: { ...el.activeStyles, ...updates.styles },
               };
-            }
+            if (state === "focus")
+              return {
+                ...el,
+                focusStyles: { ...el.focusStyles, ...updates.styles },
+              };
             return { ...el, styles: { ...el.styles, ...updates.styles } };
           }
           return { ...el, ...updates };
@@ -396,19 +495,55 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         return el;
       });
 
-    set({
-      pages: pages.map((p) =>
-        p.id === activePageId
-          ? { ...p, elements: updateInTree(p.elements) }
-          : p,
-      ),
-      past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
-      future: [],
-    });
+    let updatedElements = activePage ? updateInTree(activePage.elements) : [];
+
+    // Now auto-fix the parent's position if the child became absolute
+    if (becomingAbsolute && activePage) {
+      const parentId = findParentId(activePage.elements, id);
+      if (parentId) {
+        const fixParent = (els: CanvasElement[]): CanvasElement[] =>
+          els.map((el) => {
+            if (el.id === parentId) {
+              const currentPos = el.styles.position;
+              if (!currentPos || currentPos === "static") {
+                return {
+                  ...el,
+                  styles: { ...el.styles, position: "relative" },
+                };
+              }
+              return el;
+            }
+            if (el.children) return { ...el, children: fixParent(el.children) };
+            return el;
+          });
+        updatedElements = fixParent(updatedElements);
+      }
+    }
+
+    const updatedPages = pages.map((p) =>
+      p.id === activePageId ? { ...p, elements: updatedElements } : p,
+    );
+
+    const isRapidEdit = !!updates.styles || "content" in updates;
+
+    if (isRapidEdit) {
+      const currentSnap = snap(pages, activePageId);
+      set({ pages: updatedPages, future: [] });
+      scheduleHistoryCommit(currentSnap, (s) => {
+        set((store) => ({ past: [...store.past, s].slice(-MAX_HISTORY) }));
+      });
+    } else {
+      set({
+        pages: updatedPages,
+        past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
+        future: [],
+      });
+    }
   },
 
   deleteElement: (id) => {
-    const { pages, activePageId, past, selectedElementId } = get();
+    const { pages, activePageId, past, selectedElementId, selectedElementIds } =
+      get();
     const removeFromTree = (elements: CanvasElement[]): CanvasElement[] =>
       elements
         .filter((el) => el.id !== id)
@@ -422,16 +557,16 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
           : p,
       ),
       selectedElementId: selectedElementId === id ? null : selectedElementId,
+      selectedElementIds: (selectedElementIds ?? []).filter(
+        (sid) => sid !== id,
+      ),
       past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
       future: [],
     });
   },
 
   selectElement: (id: string | null) =>
-    set({
-      selectedElementId: id,
-      selectedElementIds: [],
-    }),
+    set({ selectedElementId: id, selectedElementIds: [] }),
   setHoveredElement: (id) => set({ hoveredElementId: id }),
   setEditingElement: (id) => set({ editingElementId: id }),
 
@@ -466,10 +601,8 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       id: `el-${generateId()}`,
       children: el.children ? el.children.map(cloneElement) : undefined,
     });
-
     const activePage = pages.find((p) => p.id === activePageId);
     if (!activePage) return;
-
     let cloned: CanvasElement | null = null;
     const findAndClone = (elements: CanvasElement[]): CanvasElement[] => {
       const index = elements.findIndex((el) => el.id === id);
@@ -483,10 +616,8 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         el.children ? { ...el, children: findAndClone(el.children) } : el,
       );
     };
-
     const newElements = findAndClone(activePage.elements);
     if (!cloned) return;
-
     set({
       pages: pages.map((p) =>
         p.id === activePageId ? { ...p, elements: newElements } : p,
@@ -526,17 +657,14 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   insertComponent: (componentId, parentId, targetIndex) => {
     const comp = get().components.find((c) => c.id === componentId);
     if (!comp) return;
-
     const clone = deepCloneForInsert(comp.element, comp.id);
     const { pages, activePageId, past } = get();
-
     const insertIntoArray = (arr: CanvasElement[]) => {
       const newArr = [...(arr || [])];
       const index = targetIndex !== undefined ? targetIndex : newArr.length;
       newArr.splice(index, 0, clone);
       return newArr;
     };
-
     set({
       pages: pages.map((p) => {
         if (p.id !== activePageId) return p;
@@ -577,6 +705,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         }
       }
     };
-    return findInTree(page.elements);
-  },
-}));
+     return findInTree(page.elements);
+   },
+
+   setRightPanelCollapsed: (v: boolean) => set({ rightPanelCollapsed: v }),
+   setLeftSidebarCollapsed: (v: boolean) => set({ leftSidebarCollapsed: v }),
+ }));
