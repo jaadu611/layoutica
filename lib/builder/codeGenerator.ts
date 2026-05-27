@@ -150,6 +150,22 @@ function stylesToTailwind(
   if (styles.flexGrow !== undefined) cls.push(`[flex-grow:${styles.flexGrow}]`);
   if (styles.flexShrink !== undefined)
     cls.push(`[flex-shrink:${styles.flexShrink}]`);
+
+  let flexVal = styles.flex;
+  if (flexVal === "1") {
+    if ((styles.height && styles.height !== "auto") || (styles.width && styles.width !== "auto")) {
+      flexVal = "none";
+    }
+  }
+  if (flexVal) {
+    const m: Record<string, string> = {
+      "1": "flex-1",
+      none: "flex-none",
+      auto: "flex-auto",
+      initial: "flex-initial",
+    };
+    cls.push(m[flexVal] || `flex-[${flexVal}]`);
+  }
   if (styles.alignItems) {
     const m: Record<string, string> = {
       "flex-start": "items-start",
@@ -630,6 +646,9 @@ function elementToJSX(
     heading: "h1",
     heading2: "h2",
     heading3: "h3",
+    heading4: "h4",
+    heading5: "h5",
+    heading6: "h6",
     text: "p",
     paragraph: "p",
     div: "div",
@@ -646,6 +665,11 @@ function elementToJSX(
     blockquote: "blockquote",
     code: "code",
     pre: "pre",
+    label: "label",
+    fieldset: "fieldset",
+    legend: "legend",
+    dialog: "dialog",
+    canvas: "canvas",
   };
   const tag = el.htmlTag || tagMap[el.type] || "div";
 
@@ -699,6 +723,20 @@ function elementToJSX(
         ? ` encType="${el.formEnctype}"`
         : "";
     return `${pad}<form${action}${method}${enctype}${clsAttr}${styAttr}>\n${kids}\n${pad}</form>`;
+  }
+
+  if (el.type === "label") {
+    const htmlFor = el.fieldName ? ` htmlFor="${el.fieldName}"` : "";
+    return `${pad}<label${htmlFor}${clsAttr}${styAttr}>\n${pad}  ${el.content || ""}\n${pad}</label>`;
+  }
+
+  if (el.type === "dialog") {
+    const openAttr = el.open ? " open" : "";
+    return `${pad}<dialog${openAttr}${clsAttr}${styAttr}>\n${kids}\n${pad}</dialog>`;
+  }
+
+  if (el.type === "canvas") {
+    return `${pad}<canvas${clsAttr}${styAttr}></canvas>`;
   }
 
   if (el.type === "divider") return `${pad}<hr${clsAttr}${styAttr} />`;
@@ -955,7 +993,7 @@ export function generatePageCode(
     needsSyntax ? COPY_BUTTON_COMPONENT : "",
     `export default function ${pageName}Page() {`,
     `  return (`,
-    `    <main className="w-full min-h-screen overflow-x-hidden">`,
+    `    <main className="flex flex-col w-full min-h-screen overflow-x-hidden">`,
     stateStyleBlock,
     bodyJSX,
     `    </main>`,

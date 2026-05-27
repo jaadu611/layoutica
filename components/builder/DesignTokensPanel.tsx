@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Plus, Trash2, Pipette } from "lucide-react";
 import { useBuilderStore } from "@/lib/builder/store";
 import { StyleProps } from "@/lib/builder/types";
@@ -98,22 +98,7 @@ const DEFAULT_TOKENS: DesignTokens = {
   ],
 };
 
-function loadTokens(): DesignTokens {
-  if (typeof window === "undefined") return DEFAULT_TOKENS;
-  try {
-    const raw = localStorage.getItem(TOKENS_KEY);
-    return raw ? JSON.parse(raw) : DEFAULT_TOKENS;
-  } catch {
-    return DEFAULT_TOKENS;
-  }
-}
 
-function saveTokens(tokens: DesignTokens) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
-  } catch {}
-}
 
 const genId = () => Math.random().toString(36).slice(2, 8);
 
@@ -288,18 +273,19 @@ export default function DesignTokensPanel({
   floating = false,
   onClose,
 }: Props) {
-  const { getSelectedElement, updateElement, editingElementId } =
-    useBuilderStore();
-  const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
+  const {
+    getSelectedElement,
+    updateElement,
+    editingElementId,
+    designTokens,
+    setDesignTokens,
+  } = useBuilderStore();
   const [tab, setTab] = useState<"colors" | "typography">("colors");
 
-  useEffect(() => {
-    setTokens(loadTokens());
-  }, []);
+  const tokens = designTokens || { colors: [], typography: [] };
 
   const persist = (next: DesignTokens) => {
-    setTokens(next);
-    saveTokens(next);
+    setDesignTokens(next);
   };
 
   const applyColor = (value: string) => {
@@ -357,7 +343,7 @@ export default function DesignTokensPanel({
       {/* Header */}
       <div
         className="flex items-center justify-between shrink-0 px-4 py-3"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ borderBottom: "1px solid var(--panel-border)" }}
       >
         <p
           style={{
@@ -534,8 +520,8 @@ export default function DesignTokensPanel({
           right: 248,
           width: 240,
           maxHeight: "calc(100vh - 80px)",
-          background: "#0e0e0e",
-          border: "1px solid rgba(255,255,255,0.09)",
+          background: "var(--panel-bg)",
+          border: "1px solid var(--panel-border)",
           borderRadius: 12,
           boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
         }}

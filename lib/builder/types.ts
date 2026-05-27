@@ -14,6 +14,9 @@ export type ElementType =
   | "heading"
   | "heading2"
   | "heading3"
+  | "heading4"
+  | "heading5"
+  | "heading6"
   | "paragraph"
   | "text"
   | "span"
@@ -47,7 +50,12 @@ export type ElementType =
   | "card"
   | "avatar"
   | "alert"
-  | "figure";
+  | "figure"
+  | "label"
+  | "fieldset"
+  | "legend"
+  | "dialog"
+  | "canvas";
 
 export interface StyleProps {
   display?:
@@ -68,6 +76,7 @@ export interface StyleProps {
     | "space-evenly";
   alignItems?: "flex-start" | "center" | "flex-end" | "stretch" | "baseline";
   flexWrap?: "wrap" | "nowrap" | "wrap-reverse";
+  flex?: string;
   gap?: string;
   columnGap?: string;
   rowGap?: string;
@@ -84,7 +93,6 @@ export interface StyleProps {
   left?: string;
   right?: string;
   bottom?: string;
-
   width?: string;
   height?: string;
   minWidth?: string;
@@ -102,7 +110,6 @@ export interface StyleProps {
   marginLeft?: string;
   marginRight?: string;
   aspectRatio?: string;
-
   color?: string;
   fontSize?: string;
   fontWeight?: string;
@@ -116,7 +123,6 @@ export interface StyleProps {
   whiteSpace?: "normal" | "nowrap" | "pre" | "pre-wrap" | "pre-line";
   textOverflow?: "clip" | "ellipsis";
   lineClamp?: string | number;
-
   backgroundColor?: string;
   backgroundImage?: string;
   backgroundSize?: string;
@@ -127,7 +133,6 @@ export interface StyleProps {
   boxShadow?: string;
   backdropFilter?: string;
   filter?: string;
-
   border?: string;
   borderWidth?: string;
   borderStyle?: "solid" | "dashed" | "dotted" | "none";
@@ -137,7 +142,6 @@ export interface StyleProps {
   borderBottom?: string;
   borderLeft?: string;
   outline?: string;
-
   cursor?: string;
   transition?: string;
   transform?: string;
@@ -148,16 +152,13 @@ export interface StyleProps {
   userSelect?: "auto" | "text" | "none" | "all";
   pointerEvents?: "auto" | "none";
   resize?: "none" | "both" | "horizontal" | "vertical";
-
   borderCollapse?: "collapse" | "separate";
   tableStripe?: boolean;
   tableHeaderBackground?: string;
   tableCellPadding?: string;
-
   appearance?: string;
   listStyleType?: "none" | "disc" | "decimal" | "square" | "circle";
   listStylePosition?: "inside" | "outside";
-
   gradientType?: "linear" | "radial" | "none";
   gradientAngle?: number;
   gradientStartColor?: string;
@@ -205,11 +206,7 @@ export interface CanvasElement {
   htmlTag?: string;
   tailwindClasses?: string;
   savedComponentId?: string;
-  metadata?: {
-    name?: string;
-    isHidden?: boolean;
-    isLocked?: boolean;
-  };
+  metadata?: { name?: string; isHidden?: boolean; isLocked?: boolean };
 }
 
 export interface Page {
@@ -233,6 +230,9 @@ export interface SavedComponent {
 
 export type SelectedState = "focus" | "hover" | "active" | "default";
 
+export type CanvasBreakpoint = "desktop" | "tablet" | "mobile";
+export type CanvasBackground = "white" | "dark" | "checker";
+
 export interface BuilderState {
   pages: Page[];
   activePageId: string;
@@ -244,11 +244,17 @@ export interface BuilderState {
   editingElementId: string | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
-   components: SavedComponent[];
-   leftSidebarCollapsed: boolean;
-   rightPanelCollapsed: boolean;
+  components: SavedComponent[];
+  leftSidebarCollapsed: boolean;
+  rightPanelCollapsed: boolean;
 
-   addPage: (name: string) => void;
+  canvasBreakpoint: CanvasBreakpoint;
+  canvasBackground: CanvasBackground;
+  showGrid: boolean;
+  showPadding: boolean;
+  showMargin: boolean;
+
+  addPage: (name: string) => void;
   deletePage: (id: string) => void;
   setActivePage: (id: string) => void;
   renamePage: (id: string, name: string) => void;
@@ -264,6 +270,7 @@ export interface BuilderState {
   setStylingState: (state: SelectedState) => void;
   toggleSelectElement: (id: string) => void;
   clearSelection: () => void;
+  clearCanvas: () => void;
   updateElement: (
     id: string,
     updates: Partial<CanvasElement>,
@@ -276,18 +283,16 @@ export interface BuilderState {
     targetIndex?: number,
   ) => void;
   duplicateElement: (id: string) => void;
-
   loadProject: (
     pages: Page[],
     components: SavedComponent[],
     designTokens: DesignTokens,
   ) => void;
-
+  setDesignTokens: (tokens: DesignTokens) => void;
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
-
   saveComponent: (name: string, element: CanvasElement) => void;
   deleteComponent: (id: string) => void;
   renameComponent: (id: string, name: string) => void;
@@ -296,9 +301,14 @@ export interface BuilderState {
     parentId?: string,
     targetIndex?: number,
   ) => void;
+  getActivePage: () => Page | undefined;
+  getSelectedElement: () => CanvasElement | undefined;
+  setLeftSidebarCollapsed: (v: boolean) => void;
+  setRightPanelCollapsed: (v: boolean) => void;
 
-   getActivePage: () => Page | undefined;
-   getSelectedElement: () => CanvasElement | undefined;
-   setLeftSidebarCollapsed: (v: boolean) => void;
-   setRightPanelCollapsed: (v: boolean) => void;
- }
+  setCanvasBreakpoint: (v: CanvasBreakpoint) => void;
+  setCanvasBackground: (v: CanvasBackground) => void;
+  setShowGrid: (v: boolean) => void;
+  setShowPadding: (v: boolean) => void;
+  setShowMargin: (v: boolean) => void;
+}

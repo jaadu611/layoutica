@@ -5,8 +5,10 @@ export interface DesignTokens {
   typography: Array<{
     id: string;
     name: string;
-    value: string;
-    category: string;
+    fontSize: string;
+    fontWeight: string;
+    lineHeight: string;
+    letterSpacing: string;
   }>;
 }
 

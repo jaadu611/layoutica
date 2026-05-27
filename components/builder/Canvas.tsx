@@ -14,14 +14,15 @@ import { ElementType, CanvasElement } from "@/lib/builder/types";
 import { defaultElement } from "./Sidebar";
 import * as LucideIcons from "lucide-react";
 
-const { ArrowUp, ArrowDown, Trash2, Copy, Plus, Bookmark, X } = LucideIcons;
-
-// ─── Text-editable element types ─────────────────────────────────────────────
+const { ArrowUp, ArrowDown, Trash2, Copy, Plus, Bookmark, X, Minus, Palette, Grid3X3, Square, BoxSelect } = LucideIcons;
 
 const TEXT_TYPES = new Set([
   "heading",
   "heading2",
   "heading3",
+  "heading4",
+  "heading5",
+  "heading6",
   "paragraph",
   "text",
   "span",
@@ -33,9 +34,9 @@ const TEXT_TYPES = new Set([
   "pre",
   "footer",
   "navbar",
+  "label",
+  "legend",
 ]);
-
-// ─── Hover/Active CSS injection ───────────────────────────────────────────────
 
 const STYLE_SKIP = new Set([
   "gradientType",
@@ -59,19 +60,17 @@ function styleObjToDeclarations(styles: Record<string, any>): string {
     styles.gradientType === "linear" &&
     styles.gradientStartColor &&
     styles.gradientEndColor
-  ) {
+  )
     lines.push(
       `  background-image: linear-gradient(${styles.gradientAngle ?? 135}deg, ${styles.gradientStartColor}, ${styles.gradientEndColor}) !important;`,
     );
-  }
-  if (styles.lineClamp) {
+  if (styles.lineClamp)
     lines.push(
       `  display: -webkit-box !important;`,
       `  -webkit-line-clamp: ${styles.lineClamp} !important;`,
       `  -webkit-box-orient: vertical !important;`,
       `  overflow: hidden !important;`,
     );
-  }
   return lines.join("\n");
 }
 
@@ -82,31 +81,21 @@ function buildStateCSS(elements: CanvasElement[]): string {
     const hasActive =
       el.activeStyles && Object.keys(el.activeStyles).length > 0;
     const hasFocus = el.focusStyles && Object.keys(el.focusStyles).length > 0;
-
-    // Emit transition on base selector so hover/active/focus animate smoothly.
-    // Inline style="" transitions don't animate against stylesheet pseudo-class rules.
-    if ((hasHover || hasActive || hasFocus) && el.styles.transition) {
+    if ((hasHover || hasActive || hasFocus) && el.styles.transition)
       rules.push(
         `[data-bid="${el.id}"] {\n  transition: ${el.styles.transition};\n}`,
       );
-    }
     if (hasHover) {
-      const decl = styleObjToDeclarations(
-        el.hoverStyles as Record<string, any>,
-      );
-      if (decl) rules.push(`[data-bid="${el.id}"]:hover {\n${decl}\n}`);
+      const d = styleObjToDeclarations(el.hoverStyles as Record<string, any>);
+      if (d) rules.push(`[data-bid="${el.id}"]:hover {\n${d}\n}`);
     }
     if (hasActive) {
-      const decl = styleObjToDeclarations(
-        el.activeStyles as Record<string, any>,
-      );
-      if (decl) rules.push(`[data-bid="${el.id}"]:active {\n${decl}\n}`);
+      const d = styleObjToDeclarations(el.activeStyles as Record<string, any>);
+      if (d) rules.push(`[data-bid="${el.id}"]:active {\n${d}\n}`);
     }
     if (hasFocus) {
-      const decl = styleObjToDeclarations(
-        el.focusStyles as Record<string, any>,
-      );
-      if (decl) rules.push(`[data-bid="${el.id}"]:focus {\n${decl}\n}`);
+      const d = styleObjToDeclarations(el.focusStyles as Record<string, any>);
+      if (d) rules.push(`[data-bid="${el.id}"]:focus {\n${d}\n}`);
     }
     for (const child of el.children || []) walk(child);
   }
@@ -118,7 +107,6 @@ function HoverActiveStyleSheet() {
   const pages = useBuilderStore((s) => s.pages);
   const activePageId = useBuilderStore((s) => s.activePageId);
   const activePage = pages.find((p) => p.id === activePageId);
-
   useEffect(() => {
     const css = activePage ? buildStateCSS(activePage.elements) : "";
     const id = "builder-hover-active-styles";
@@ -130,22 +118,24 @@ function HoverActiveStyleSheet() {
     }
     tag.textContent = css;
   });
-
   return null;
 }
-
-// ─── Context Menu ─────────────────────────────────────────────────────────────
-
 function ContextMenu({
   x,
   y,
   elId,
   onClose,
+  onClearCanvas,
+  isolatedPageId,
+  setIsolatedPageId,
 }: {
   x: number;
   y: number;
   elId: string;
   onClose: () => void;
+  onClearCanvas?: () => void;
+  isolatedPageId: string | null;
+  setIsolatedPageId: (id: string | null) => void;
 }) {
   const {
     moveElement,
@@ -153,11 +143,38 @@ function ContextMenu({
     duplicateElement,
     saveComponent,
     getActivePage,
+    designTokens,
+    setDesignTokens,
+    showGrid,
+    showPadding,
+    showMargin,
+    setShowGrid,
+    setShowPadding,
+    setShowMargin,
+    clearCanvas,
+    pages,
+    setActivePage,
   } = useBuilderStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState("");
+
+  const page = getActivePage();
+
+  const el = React.useMemo(() => {
+    if (!page) return undefined;
+    const find = (els: CanvasElement[]): CanvasElement | undefined => {
+      for (const item of els) {
+        if (item.id === elId) return item;
+        if (item.children) {
+          const f = find(item.children);
+          if (f) return f;
+        }
+      }
+    };
+    return find(page.elements);
+  }, [page, elId]);
 
   useLayoutEffect(() => {
     if (menuRef.current) {
@@ -182,36 +199,165 @@ function ContextMenu({
     return () => document.removeEventListener("mousedown", handle);
   }, [onClose]);
 
+  if (elId === "canvas") {
+    return (
+      <div
+        ref={menuRef}
+        className="fixed z-10000 bg-panel-bg border border-panel-border rounded-lg shadow-2xl py-1.5 min-w-[180px]"
+        style={{ left: pos.left, top: pos.top }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isolatedPageId && (
+          <>
+            <button
+              onClick={() => {
+                setIsolatedPageId(null);
+                onClose();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+            >
+              <Grid3X3 size={12} className="text-white/30" /> Show All Pages
+            </button>
+            <div className="my-1 border-t border-panel-border" />
+          </>
+        )}
+        <div className="px-3 py-1.5 mb-1 border-b border-panel-border">
+          <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">
+            Canvas Settings
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            setShowGrid(!showGrid);
+            onClose();
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <Grid3X3 size={12} className="text-white/30" /> Grid
+          </div>
+          <span className="text-[10px] text-white/40">{showGrid ? "On" : "Off"}</span>
+        </button>
+        <button
+          onClick={() => {
+            setShowPadding(!showPadding);
+            onClose();
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <Square size={12} className="text-white/30" /> Padding Overlay
+          </div>
+          <span className="text-[10px] text-white/40">{showPadding ? "On" : "Off"}</span>
+        </button>
+        <button
+          onClick={() => {
+            setShowMargin(!showMargin);
+            onClose();
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <BoxSelect size={12} className="text-white/30" /> Margin Overlay
+          </div>
+          <span className="text-[10px] text-white/40">{showMargin ? "On" : "Off"}</span>
+        </button>
+        <div className="my-1 border-t border-panel-border" />
+        <button
+          onClick={() => {
+            if (onClearCanvas) onClearCanvas();
+            onClose();
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] text-red-400 hover:bg-red-500/10 transition-colors"
+        >
+          <Trash2 size={12} /> Clear Canvas
+        </button>
+      </div>
+    );
+  }
+
   const handleSave = () => {
-    const page = getActivePage();
-    if (!page) return;
-    const find = (els: CanvasElement[]): CanvasElement | undefined => {
-      for (const el of els) {
-        if (el.id === elId) return el;
-        if (el.children) {
-          const f = find(el.children);
-          if (f) return f;
-        }
-      }
-    };
-    const el = find(page.elements);
     if (!el) return;
     saveComponent(saveName.trim() || el.type, el);
     onClose();
   };
 
+  const handleCreateColorVariable = () => {
+    if (!el) return;
+    const colorVal = el.styles?.backgroundColor || el.styles?.color;
+    const finalColor = (colorVal && colorVal.startsWith("#")) ? colorVal : "#6366f1";
+
+    const nextId = `c-${Math.random().toString(36).substr(2, 9)}`;
+    const newColorToken = { id: nextId, name: finalColor, value: finalColor };
+
+    const currentColors = designTokens?.colors || [];
+    const currentTypography = designTokens?.typography || [];
+
+    const updated = {
+      colors: [...currentColors, newColorToken],
+      typography: currentTypography,
+    };
+
+    setDesignTokens(updated);
+    onClose();
+  };
+
+  const pgOfElement = React.useMemo(() => {
+    for (const p of pages) {
+      if (p.id === elId) return p;
+      const find = (els: CanvasElement[]): CanvasElement | undefined => {
+        for (const item of els) {
+          if (item.id === elId) return item;
+          if (item.children) {
+            const f = find(item.children);
+            if (f) return f;
+          }
+        }
+      };
+      if (find(p.elements)) return p;
+    }
+    return undefined;
+  }, [pages, elId]);
+
   return (
     <div
       ref={menuRef}
-      className="fixed z-10000 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-2xl py-1.5 min-w-[180px]"
+      className="fixed z-10000 bg-panel-bg border border-panel-border rounded-lg shadow-2xl py-1.5 min-w-[180px]"
       style={{ left: pos.left, top: pos.top }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="px-3 py-1.5 mb-1 border-b border-[#333]">
+      <div className="px-3 py-1.5 mb-1 border-b border-panel-border">
         <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">
           Element
         </span>
       </div>
+      {pgOfElement && (
+        <>
+          {isolatedPageId === pgOfElement.id ? (
+            <button
+              onClick={() => {
+                setIsolatedPageId(null);
+                onClose();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+            >
+              <Grid3X3 size={12} className="text-white/30" /> Show All Pages
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setIsolatedPageId(pgOfElement.id);
+                setActivePage(pgOfElement.id);
+                onClose();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+            >
+              <BoxSelect size={12} className="text-white/30" /> Focus Page
+            </button>
+          )}
+          <div className="my-1 border-t border-panel-border" />
+        </>
+      )}
       {[
         {
           label: "Move Up",
@@ -238,7 +384,7 @@ function ContextMenu({
           {icon} {label}
         </button>
       ))}
-      <div className="my-1 border-t border-[#333]" />
+      <div className="my-1 border-t border-panel-border" />
       <button
         onClick={() => {
           duplicateElement(elId);
@@ -248,7 +394,14 @@ function ContextMenu({
       >
         <Copy size={12} className="text-white/30" /> Duplicate
       </button>
-      <div className="my-1 border-t border-[#333]" />
+      <div className="my-1 border-t border-panel-border" />
+      <button
+        onClick={handleCreateColorVariable}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+      >
+        <Palette size={12} className="text-white/30" /> Create Color Variable
+      </button>
+      <div className="my-1 border-t border-panel-border" />
       {saving ? (
         <div className="px-3 py-2 flex gap-1.5">
           <input
@@ -277,7 +430,7 @@ function ContextMenu({
           <Bookmark size={12} className="text-white/30" /> Save as Component
         </button>
       )}
-      <div className="my-1 border-t border-[#333]" />
+      <div className="my-1 border-t border-panel-border" />
       <button
         onClick={() => {
           deleteElement(elId);
@@ -290,9 +443,6 @@ function ContextMenu({
     </div>
   );
 }
-
-// ─── Inline text editor ───────────────────────────────────────────────────────
-
 function InlineEditor({
   el,
   onCommit,
@@ -311,14 +461,12 @@ function InlineEditor({
     "code",
   ].includes(el.type);
   const ref = useRef<HTMLTextAreaElement & HTMLInputElement>(null);
-
   useEffect(() => {
     if (ref.current) {
       ref.current.focus();
       ref.current.select();
     }
   }, []);
-
   const {
     gradientType,
     gradientAngle,
@@ -327,7 +475,6 @@ function InlineEditor({
     lineClamp,
     ...restStyles
   } = el.styles as any;
-
   const sharedStyle: React.CSSProperties = {
     ...restStyles,
     position: "absolute",
@@ -337,7 +484,7 @@ function InlineEditor({
     background: "transparent",
     border: "none",
     outline: "2px solid #0d99ff",
-    outlineOffset: 0,
+    outlineOffset: "-2px",
     padding: "inherit",
     margin: 0,
     font: "inherit",
@@ -351,7 +498,6 @@ function InlineEditor({
     borderRadius: (restStyles.borderRadius as any) || 0,
     boxSizing: "border-box",
   };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -367,7 +513,6 @@ function InlineEditor({
     }
     e.stopPropagation();
   };
-
   if (isMultiline)
     return (
       <textarea
@@ -391,13 +536,12 @@ function InlineEditor({
     />
   );
 }
-
-// ─── RenderElement ────────────────────────────────────────────────────────────
-
 interface RenderElementProps {
   el: CanvasElement;
   index: number;
   parentId?: string;
+  pageId: string;
+  zoom: number;
   onReorderDragStart: (e: React.DragEvent, id: string) => void;
   onReorderDragOver: (
     e: React.DragEvent,
@@ -423,11 +567,12 @@ interface RenderElementProps {
   onCommitEdit: (id: string, val: string) => void;
   onCancelEdit: () => void;
 }
-
 function RenderElement({
   el,
   index,
   parentId,
+  pageId,
+  zoom,
   onReorderDragStart,
   onReorderDragOver,
   onReorderDrop,
@@ -449,9 +594,9 @@ function RenderElement({
     toggleSelectElement,
     setHoveredElement,
     updateElement,
+    activePageId,
+    setActivePage,
   } = useBuilderStore();
-
-  // ── Selection state ───────────────────────────────────────────────────────
   const isSelected = selectedElementId === el.id;
   const isMultiSelected = (selectedElementIds ?? []).includes(el.id);
   const isAnySelected = isSelected || isMultiSelected;
@@ -475,11 +620,8 @@ function RenderElement({
     "figure",
   ].includes(el.type);
   const isTextType = TEXT_TYPES.has(el.type);
-
-  // ── Visibility / lock ────────────────────────────────────────────────────
   const isHidden = !!el.metadata?.isHidden;
   const isLocked = !!el.metadata?.isLocked;
-
   const isResizing = useRef(false);
   const startPos = useRef({ x: 0, y: 0 });
   const startSize = useRef({ width: 0, height: 0 });
@@ -494,44 +636,33 @@ function RenderElement({
       e.preventDefault();
       e.stopPropagation();
       isDraggingFree.current = true;
+      if (activePageId !== pageId) {
+        setActivePage(pageId);
+      }
       selectElement(el.id);
-
       const node = e.currentTarget as HTMLElement;
       const offsetParent =
         (node.offsetParent as HTMLElement) || document.documentElement;
       const parentRect = offsetParent.getBoundingClientRect();
       const nodeRect = node.getBoundingClientRect();
-
-      // Use the element's actual rendered top/left relative to its offset parent.
-      // This is critical for the first drag after switching to absolute — el.styles.top
-      // may be undefined/0 while the element is visually somewhere else in the flow.
       const actualTop = nodeRect.top - parentRect.top + offsetParent.scrollTop;
       const actualLeft =
         nodeRect.left - parentRect.left + offsetParent.scrollLeft;
-
       startElPos.current = { top: actualTop, left: actualLeft };
-
-      // Record mouse position relative to the parent origin
       startPos.current = {
-        x: e.clientX - parentRect.left,
-        y: e.clientY - parentRect.top,
+        x: e.clientX,
+        y: e.clientY,
       };
-
-      // Immediately write the actual position so styles match reality before any move
       updateElement(el.id, {
         styles: {
           top: `${Math.round(actualTop)}px`,
           left: `${Math.round(actualLeft)}px`,
         },
       });
-
       const onMove = (mv: MouseEvent) => {
         if (!isDraggingFree.current) return;
-        const pr = offsetParent.getBoundingClientRect();
-        const mouseX = mv.clientX - pr.left;
-        const mouseY = mv.clientY - pr.top;
-        const dx = mouseX - startPos.current.x;
-        const dy = mouseY - startPos.current.y;
+        const dx = (mv.clientX - startPos.current.x) / zoom;
+        const dy = (mv.clientY - startPos.current.y) / zoom;
         updateElement(el.id, {
           styles: {
             top: `${Math.round(startElPos.current.top + dy)}px`,
@@ -547,11 +678,11 @@ function RenderElement({
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [el.id, el.styles, isEditing, isLocked, selectElement, updateElement],
+    [el.id, el.styles, isEditing, isLocked, selectElement, updateElement, zoom, activePageId, setActivePage, pageId],
   );
 
   const onResizeStart = useCallback(
-    (e: React.MouseEvent) => {
+    (direction: "right" | "bottom" | "both") => (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       isResizing.current = true;
@@ -559,14 +690,27 @@ function RenderElement({
       const rect = (
         e.currentTarget as HTMLElement
       ).parentElement?.getBoundingClientRect();
-      if (rect) startSize.current = { width: rect.width, height: rect.height };
+      if (rect) {
+        startSize.current = {
+          width: rect.width / zoom,
+          height: rect.height / zoom,
+        };
+      }
       const onMove = (mv: MouseEvent) => {
         if (!isResizing.current) return;
+        const dx = (mv.clientX - startPos.current.x) / zoom;
+        const dy = (mv.clientY - startPos.current.y) / zoom;
+        const updates: any = {};
+        if (direction === "right" || direction === "both") {
+          updates.width = `${Math.max(40, startSize.current.width + dx)}px`;
+        }
+        if (direction === "bottom" || direction === "both") {
+          updates.height = `${Math.max(20, startSize.current.height + dy)}px`;
+        }
         updateElement(el.id, {
           styles: {
             ...el.styles,
-            width: `${Math.max(40, startSize.current.width + (mv.clientX - startPos.current.x))}px`,
-            height: `${Math.max(20, startSize.current.height + (mv.clientY - startPos.current.y))}px`,
+            ...updates,
           },
         });
       };
@@ -578,7 +722,7 @@ function RenderElement({
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [el.id, el.styles, updateElement],
+    [el.id, el.styles, updateElement, zoom],
   );
 
   const {
@@ -589,12 +733,19 @@ function RenderElement({
     lineClamp,
     ...restStyles
   } = el.styles as any;
-
   const isAbsolute =
     el.styles.position === "absolute" || el.styles.position === "fixed";
 
+  const finalStyles = { ...restStyles };
+  if (finalStyles.height && finalStyles.height !== "auto" && finalStyles.flex === "1") {
+    finalStyles.flex = "none";
+  }
+  if (finalStyles.width && finalStyles.width !== "auto" && finalStyles.flex === "1") {
+    finalStyles.flex = "none";
+  }
+
   const wrapperStyle: React.CSSProperties = {
-    position: (restStyles.position as any) || "relative",
+    position: (finalStyles.position as any) || "relative",
     cursor: isEditing
       ? "text"
       : isLocked
@@ -602,14 +753,11 @@ function RenderElement({
         : isAbsolute
           ? "move"
           : "grab",
-    // Hidden elements show at 30% opacity in editor so you can still see/select them
     opacity:
-      draggingId === el.id ? 0.3 : isHidden ? 0.25 : (restStyles.opacity ?? 1),
-    overflow: (restStyles.overflow as any) || undefined,
+      draggingId === el.id ? 0.3 : isHidden ? 0.25 : (finalStyles.opacity ?? 1),
+    overflow: (finalStyles.overflow as any) || undefined,
     boxSizing: "border-box",
-    ...restStyles,
-    // Blue dotted = primary selection, purple dotted = part of multi-selection
-    // Orange dotted = locked
+    ...finalStyles,
     outline: isEditing
       ? "2px solid #0d99ff"
       : isSelected
@@ -625,9 +773,8 @@ function RenderElement({
             : isTarget && dropPos === "inside"
               ? "2px dashed #0d99ff"
               : "none",
-    outlineOffset: "0px",
+    outlineOffset: "-2px",
     zIndex: isAnySelected ? 2 : isHovered ? 1 : (restStyles.zIndex as any),
-    // Strikethrough-style diagonal pattern overlay for hidden elements
     ...(isHidden
       ? {
           backgroundImage:
@@ -656,6 +803,27 @@ function RenderElement({
     article: "article",
     aside: "aside",
     main: "main",
+    header: "header",
+    nav: "nav",
+    form: "form",
+    footer: "footer",
+    heading: "h1",
+    heading2: "h2",
+    heading3: "h3",
+    heading4: "h4",
+    heading5: "h5",
+    heading6: "h6",
+    paragraph: "p",
+    text: "p",
+    span: "span",
+    link: "a",
+    blockquote: "blockquote",
+    code: "code",
+    badge: "span",
+    button: "button",
+    label: "label",
+    legend: "legend",
+    fieldset: "fieldset",
   };
   const htmlTag = el.htmlTag || TAG_MAP[el.type] || "div";
 
@@ -665,15 +833,18 @@ function RenderElement({
     onClick: (e: React.MouseEvent) => {
       e.stopPropagation();
       if (isEditing) return;
-      if (e.shiftKey) {
-        toggleSelectElement(el.id);
-      } else {
-        selectElement(el.id);
+      if (activePageId !== pageId) {
+        setActivePage(pageId);
       }
+      if (e.shiftKey) toggleSelectElement(el.id);
+      else selectElement(el.id);
     },
     onDoubleClick: (e: React.MouseEvent) => {
       e.stopPropagation();
       if (isLocked) return;
+      if (activePageId !== pageId) {
+        setActivePage(pageId);
+      }
       selectElement(el.id);
       if (isTextType) onStartEdit(el.id);
     },
@@ -682,8 +853,6 @@ function RenderElement({
       setHoveredElement(el.id);
     },
     onMouseLeave: () => setHoveredElement(null),
-    // Absolute/fixed elements use free mouse-drag — disable HTML5 drag so
-    // it doesn't interfere, and handle movement via onMouseDown instead.
     draggable: !isEditing && !isLocked && !isAbsolute,
     onMouseDown: isAbsolute ? onFreeDragStart : undefined,
     onDragStart: (e: React.DragEvent) => {
@@ -710,7 +879,6 @@ function RenderElement({
       onContextMenu(e, el.id);
     },
   };
-
   const renderContent = () => {
     if (isEditing && isTextType)
       return (
@@ -725,7 +893,6 @@ function RenderElement({
           />
         </>
       );
-
     if (el.type === "image")
       return (
         <img
@@ -1069,32 +1236,105 @@ function RenderElement({
           </details>
         </div>
       );
+    if (el.type === "dialog") {
+      return (
+        <dialog
+          open={true}
+          style={{
+            pointerEvents: "none",
+            display: "block",
+            position: "static",
+            color: "inherit",
+            backgroundColor: "inherit",
+            border: "none",
+            padding: 0,
+            margin: 0,
+            width: "100%",
+            height: "100%",
+          }}
+        >
+          {el.children && el.children.length === 0 && (
+            <div
+              style={{
+                pointerEvents: "none",
+                padding: "16px",
+                textAlign: "center",
+                color: "rgba(148,163,184,0.5)",
+                fontSize: 11,
+                border: "1px dashed rgba(148,163,184,0.2)",
+                borderRadius: 4,
+                userSelect: "none",
+              }}
+            >
+              dialog — drop elements here
+            </div>
+          )}
+          {el.children?.map((child, childIndex) => (
+            <RenderElement
+              key={child.id}
+              el={child}
+              index={childIndex}
+              parentId={el.id}
+              pageId={pageId}
+              zoom={zoom}
+              onContextMenu={onContextMenu}
+              onReorderDragStart={onReorderDragStart}
+              onReorderDragOver={onReorderDragOver}
+              onReorderDrop={onReorderDrop}
+              draggingId={draggingId}
+              dropTargetId={dropTargetId}
+              dropPos={dropPos}
+              parentIsHorizontal={isHorizontal}
+              editingId={editingId}
+              onStartEdit={onStartEdit}
+              onCommitEdit={onCommitEdit}
+              onCancelEdit={onCancelEdit}
+            />
+          ))}
+        </dialog>
+      );
+    }
+    if (el.type === "canvas") {
+      return (
+        <canvas
+          style={{
+            pointerEvents: "none",
+            width: "100%",
+            height: "100%",
+            display: "block",
+          }}
+        />
+      );
+    }
     if (el.type === "alert") {
-      const variantColors: Record<
-        string,
-        { bg: string; border: string; color: string; icon: string }
-      > = {
-        info: { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", icon: "ℹ" },
-        success: {
-          bg: "#f0fdf4",
-          border: "#bbf7d0",
-          color: "#15803d",
-          icon: "✓",
-        },
-        warning: {
-          bg: "#fffbeb",
-          border: "#fde68a",
-          color: "#b45309",
-          icon: "⚠",
-        },
-        error: {
-          bg: "#fef2f2",
-          border: "#fecaca",
-          color: "#b91c1c",
-          icon: "✕",
-        },
-      };
-      const v = variantColors[el.alertVariant || "info"];
+      const v = (
+        {
+          info: {
+            bg: "#eff6ff",
+            border: "#bfdbfe",
+            color: "#1d4ed8",
+            icon: "ℹ",
+          },
+          success: {
+            bg: "#f0fdf4",
+            border: "#bbf7d0",
+            color: "#15803d",
+            icon: "✓",
+          },
+          warning: {
+            bg: "#fffbeb",
+            border: "#fde68a",
+            color: "#b45309",
+            icon: "⚠",
+          },
+          error: {
+            bg: "#fef2f2",
+            border: "#fecaca",
+            color: "#b91c1c",
+            icon: "✕",
+          },
+        } as any
+      )[el.alertVariant || "info"];
       return (
         <div
           style={{
@@ -1147,7 +1387,9 @@ function RenderElement({
       const name = el.iconName || "Sparkles";
       const normalized = name
         .split(/[-_\s]+/)
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .map(
+          (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+        )
         .join("");
       const Icon = (LucideIcons as any)[normalized];
       if (!Icon)
@@ -1168,8 +1410,7 @@ function RenderElement({
           style={{
             pointerEvents: "none",
             display: "inline-block",
-            fontFamily:
-              "'JetBrains Mono','Fira Code','Cascadia Code',monospace",
+            fontFamily: "'JetBrains Mono','Fira Code',monospace",
             fontSize: el.styles.fontSize || "13px",
             backgroundColor: el.styles.backgroundColor || "#1e1e2e",
             color: el.styles.color || "#cdd6f4",
@@ -1280,7 +1521,6 @@ function RenderElement({
           {el.content || "⌘K"}
         </kbd>
       );
-
     return (
       <>
         {el.content ? (
@@ -1288,7 +1528,7 @@ function RenderElement({
         ) : (
           el.children &&
           el.children.length === 0 && (
-            <div
+            <span
               style={{
                 pointerEvents: "none",
                 padding: "16px",
@@ -1298,10 +1538,11 @@ function RenderElement({
                 border: "1px dashed rgba(148,163,184,0.2)",
                 borderRadius: 4,
                 userSelect: "none",
+                display: "block",
               }}
             >
               {el.type} — drop elements here
-            </div>
+            </span>
           )
         )}
         {el.children?.map((child, childIndex) => (
@@ -1310,6 +1551,8 @@ function RenderElement({
             el={child}
             index={childIndex}
             parentId={el.id}
+            pageId={pageId}
+            zoom={zoom}
             onContextMenu={onContextMenu}
             onReorderDragStart={onReorderDragStart}
             onReorderDragOver={onReorderDragOver}
@@ -1333,7 +1576,7 @@ function RenderElement({
     wrapperProps,
     <>
       {isTarget && dropPos !== "inside" && (
-        <div
+        <span
           className="absolute bg-blue-500 pointer-events-none rounded-full"
           style={{
             zIndex: 10,
@@ -1353,31 +1596,67 @@ function RenderElement({
         />
       )}
       {isSelected && !isEditing && (
-        <div
-          data-resize-handle="true"
-          onMouseDown={onResizeStart}
-          style={{
-            position: "absolute",
-            bottom: 0,
-            right: 0,
-            width: 18,
-            height: 18,
-            cursor: "nwse-resize",
-            zIndex: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-            <circle cx="2.5" cy="7" r="1.3" fill="#2563eb" />
-            <circle cx="7" cy="7" r="1.3" fill="#2563eb" />
-            <circle cx="7" cy="2.5" r="1.3" fill="#2563eb" />
-          </svg>
-        </div>
+        <>
+          {/* Right edge handle */}
+          <span
+            data-resize-handle="right"
+            onMouseDown={onResizeStart("right")}
+            style={{
+              position: "absolute",
+              top: "50%",
+              right: -4,
+              transform: "translateY(-50%)",
+              width: 8,
+              height: 8,
+              backgroundColor: "#fff",
+              border: "1.5px solid #0d99ff",
+              borderRadius: "1px",
+              cursor: "ew-resize",
+              zIndex: 10,
+              pointerEvents: "auto",
+            }}
+          />
+          {/* Bottom edge handle */}
+          <span
+            data-resize-handle="bottom"
+            onMouseDown={onResizeStart("bottom")}
+            style={{
+              position: "absolute",
+              bottom: -4,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 8,
+              height: 8,
+              backgroundColor: "#fff",
+              border: "1.5px solid #0d99ff",
+              borderRadius: "1px",
+              cursor: "ns-resize",
+              zIndex: 10,
+              pointerEvents: "auto",
+            }}
+          />
+          {/* Bottom-right corner handle */}
+          <span
+            data-resize-handle="both"
+            onMouseDown={onResizeStart("both")}
+            style={{
+              position: "absolute",
+              bottom: -4,
+              right: -4,
+              width: 8,
+              height: 8,
+              backgroundColor: "#fff",
+              border: "1.5px solid #0d99ff",
+              borderRadius: "1px",
+              cursor: "nwse-resize",
+              zIndex: 10,
+              pointerEvents: "auto",
+            }}
+          />
+        </>
       )}
       {isSelected && !isEditing && isTextType && (
-        <div
+        <span
           style={{
             position: "absolute",
             top: -20,
@@ -1390,20 +1669,119 @@ function RenderElement({
             pointerEvents: "none",
             whiteSpace: "nowrap",
             zIndex: 10,
+            display: "inline-block",
           }}
         >
           {el.type}
-        </div>
+        </span>
       )}
       {renderContent()}
     </>,
   );
 }
 
-// ─── Clipboard (sessionStorage so HMR doesn't wipe it) ───────────────────────
+// ─── Spacing overlay (PATCH 3) ────────────────────────────────────────────────
+
+function SpacingOverlay({ mode }: { mode: "padding" | "margin" }) {
+  const pages = useBuilderStore((s) => s.pages);
+  const activePageId = useBuilderStore((s) => s.activePageId);
+  const [rects, setRects] = useState<
+    { id: string; top: number; left: number; width: number; height: number }[]
+  >([]);
+
+  useEffect(() => {
+    const activePage = pages.find((p) => p.id === activePageId);
+    if (!activePage) return;
+
+    const artboardNode = document.querySelector(`[data-artboard-id="${activePageId}"]`) || document.querySelector('[data-artboard="true"]');
+    if (!artboardNode) return;
+    const artboardRect = artboardNode.getBoundingClientRect();
+
+    const designWidth = artboardNode.clientWidth;
+    const currentScale = designWidth > 0 ? artboardRect.width / designWidth : 1;
+
+    const collect = (els: CanvasElement[]): CanvasElement[] =>
+      els.flatMap((el) => [el, ...collect(el.children || [])]);
+    const computed: typeof rects = [];
+
+    for (const el of collect(activePage.elements)) {
+      const node = document.querySelector(`[data-bid="${el.id}"]`);
+      if (!node) continue;
+      const r = node.getBoundingClientRect();
+      const cs = window.getComputedStyle(node);
+      const t =
+        parseFloat(cs[mode === "padding" ? "paddingTop" : "marginTop"]) || 0;
+      const ri =
+        parseFloat(cs[mode === "padding" ? "paddingRight" : "marginRight"]) ||
+        0;
+      const b =
+        parseFloat(cs[mode === "padding" ? "paddingBottom" : "marginBottom"]) ||
+        0;
+      const l =
+        parseFloat(cs[mode === "padding" ? "paddingLeft" : "marginLeft"]) || 0;
+      if (!t && !ri && !b && !l) continue;
+
+      const scale = currentScale || 1;
+      const relativeTop = (r.top - artboardRect.top) / scale;
+      const relativeLeft = (r.left - artboardRect.left) / scale;
+      const relativeWidth = r.width / scale;
+      const relativeHeight = r.height / scale;
+
+      computed.push(
+        mode === "padding"
+          ? {
+              id: el.id,
+              top: relativeTop,
+              left: relativeLeft,
+              width: relativeWidth,
+              height: relativeHeight,
+            }
+          : {
+              id: el.id,
+              top: relativeTop - t / scale,
+              left: relativeLeft - l / scale,
+              width: relativeWidth + (l + ri) / scale,
+              height: relativeHeight + (t + b) / scale,
+            },
+      );
+    }
+    setRects(computed);
+  }, [pages, activePageId, mode]);
+
+  const c =
+    mode === "padding"
+      ? { bg: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.4)" }
+      : {
+          bg: "rgba(251,191,36,0.08)",
+          border: "1px solid rgba(251,191,36,0.4)",
+        };
+
+  return (
+    <>
+      {rects.map((r) => (
+        <div
+          key={r.id}
+          style={{
+            position: "absolute",
+            top: r.top,
+            left: r.left,
+            width: r.width,
+            height: r.height,
+            background: c.bg,
+            border: c.border,
+            pointerEvents: "none",
+            zIndex: 8999,
+            boxSizing: "border-box",
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+// ─── Clipboard ────────────────────────────────────────────────────────────────
 
 const CLIPBOARD_KEY = "builder-clipboard";
-
 function readClipboard(): CanvasElement[] {
   try {
     const raw = sessionStorage.getItem(CLIPBOARD_KEY);
@@ -1412,17 +1790,14 @@ function readClipboard(): CanvasElement[] {
     return [];
   }
 }
-
 function writeClipboard(els: CanvasElement[]) {
   try {
     sessionStorage.setItem(CLIPBOARD_KEY, JSON.stringify(els));
   } catch {}
 }
-
 function generateId() {
   return Math.random().toString(36).substr(2, 9);
 }
-
 function deepCloneWithNewIds(el: CanvasElement): CanvasElement {
   return {
     ...el,
@@ -1430,8 +1805,6 @@ function deepCloneWithNewIds(el: CanvasElement): CanvasElement {
     children: el.children?.map(deepCloneWithNewIds),
   };
 }
-
-// ─── Keyboard shortcut toast ──────────────────────────────────────────────────
 
 function ShortcutToast({
   message,
@@ -1476,15 +1849,58 @@ export default function Canvas() {
     selectedElementIds,
     editingElementId,
     setEditingElement,
+    clearCanvas,
+    pages,
+    activePageId,
+    setActivePage,
   } = useBuilderStore();
-
-  // Fix 6: subscribe directly to past/future lengths so these booleans are
-  // always fresh — calling canUndo() inside a useEffect closure captures a
-  // stale reference and misses history updates after the effect was created.
   const undoable = useBuilderStore((s) => s.past.length > 0);
   const redoable = useBuilderStore((s) => s.future.length > 0);
 
+  const [isolatedPageId, setIsolatedPageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isolatedPageId && !pages.some((p) => p.id === isolatedPageId)) {
+      setIsolatedPageId(null);
+    }
+  }, [pages, isolatedPageId]);
+
+  // PATCH 1: read canvas view settings from store
+  const canvasBreakpoint = useBuilderStore((s) => s.canvasBreakpoint);
+  const showGrid = useBuilderStore((s) => s.showGrid);
+  const showPadding = useBuilderStore((s) => s.showPadding);
+  const showMargin = useBuilderStore((s) => s.showMargin);
+  const leftSidebarCollapsed = useBuilderStore((s) => s.leftSidebarCollapsed);
+  const rightPanelCollapsed = useBuilderStore((s) => s.rightPanelCollapsed);
+
   const page = getActivePage();
+
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [animateTransform, setAnimateTransform] = useState(false);
+  const [isDraggingOverVoid, setIsDraggingOverVoid] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropPos, setDropPos] = useState<
+    "top" | "bottom" | "left" | "right" | "inside"
+  >("inside");
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    elId: string;
+  } | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  useEffect(() => {
+    setAnimateTransform(true);
+    const timer = setTimeout(() => setAnimateTransform(false), 350);
+    return () => clearTimeout(timer);
+  }, [canvasBreakpoint, leftSidebarCollapsed, rightPanelCollapsed]);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isDraggingPan, setIsDraggingPan] = useState(false);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const dragStartPanRef = useRef({ x: 0, y: 0 });
 
   const handleStartEdit = useCallback(
     (id: string) => setEditingElement(id),
@@ -1502,11 +1918,9 @@ export default function Canvas() {
     [setEditingElement],
   );
 
-  // Toast state
   const [toast, setToast] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setToastVisible(true);
@@ -1514,19 +1928,16 @@ export default function Canvas() {
     toastTimer.current = setTimeout(() => setToastVisible(false), 1800);
   }, []);
 
-  // Collect all currently selected element IDs (single + multi)
   const getAllSelected = useCallback(() => {
-    const ids = [
+    return [
       ...(selectedElementIds ?? []),
       ...(selectedElementId &&
       !(selectedElementIds ?? []).includes(selectedElementId)
         ? [selectedElementId]
         : []),
     ];
-    return ids;
   }, [selectedElementId, selectedElementIds]);
 
-  // Find an element in the tree by id
   const findElement = useCallback(
     (id: string): CanvasElement | undefined => {
       const pg = getActivePage();
@@ -1545,6 +1956,198 @@ export default function Canvas() {
     [getActivePage],
   );
 
+  const fitArtboard = useCallback(() => {
+    const container = canvasContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const activeIndex = pages.findIndex((p) => p.id === activePageId);
+    const idx = !isolatedPageId && activeIndex >= 0 ? activeIndex : 0;
+    const artboardWidth =
+      canvasBreakpoint === "tablet"
+        ? 768
+        : canvasBreakpoint === "mobile"
+          ? 390
+          : 1280;
+
+    const padding = 80;
+    const availableWidth = rect.width - padding;
+    const initialZoom = Math.min(availableWidth / artboardWidth, 1.0);
+
+    const availableHeight = rect.height - padding;
+    const initialZoomH = Math.min(availableHeight / 550, 1.0);
+
+    const finalZoom = Math.max(0.15, Math.min(initialZoom, initialZoomH, 1.0));
+
+    const pageX = 160 + idx * (artboardWidth + 120) + artboardWidth / 2;
+    const pageY = 160 + 550 / 2;
+
+    setZoom(finalZoom);
+    setPan({
+      x: rect.width / 2 - pageX * finalZoom,
+      y: rect.height / 2 - pageY * finalZoom,
+    });
+  }, [canvasBreakpoint, setZoom, setPan, pages, activePageId, isolatedPageId]);
+
+  const centerArtboard = useCallback(() => {
+    const container = canvasContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const activeIndex = pages.findIndex((p) => p.id === activePageId);
+    const idx = !isolatedPageId && activeIndex >= 0 ? activeIndex : 0;
+    const artboardWidth =
+      canvasBreakpoint === "tablet"
+        ? 768
+        : canvasBreakpoint === "mobile"
+          ? 390
+          : 1280;
+
+    const pageX = 160 + idx * (artboardWidth + 120) + artboardWidth / 2;
+    const pageY = 160 + 550 / 2;
+
+    setPan({
+      x: rect.width / 2 - pageX * zoom,
+      y: rect.height / 2 - pageY * zoom,
+    });
+  }, [canvasBreakpoint, zoom, pages, activePageId, isolatedPageId]);
+
+  const centerArtboardRef = useRef(centerArtboard);
+  useEffect(() => {
+    centerArtboardRef.current = centerArtboard;
+  }, [centerArtboard]);
+
+  useEffect(() => {
+    fitArtboard();
+  }, [isolatedPageId]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      centerArtboardRef.current();
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    // Re-center when panels toggle, after DOM transitions settle
+    const timer = setTimeout(() => {
+      centerArtboardRef.current();
+    }, 320); // match transition times
+    return () => clearTimeout(timer);
+  }, [leftSidebarCollapsed, rightPanelCollapsed]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        const active = document.activeElement;
+        const isTyping =
+          active &&
+          (active.tagName === "INPUT" ||
+            active.tagName === "TEXTAREA" ||
+            (active as HTMLElement).isContentEditable);
+        if (!isTyping) {
+          e.preventDefault();
+          setIsSpacePressed(true);
+        }
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        setIsSpacePressed(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    const handleBlur = () => {
+      setIsSpacePressed(false);
+    };
+    window.addEventListener("blur", handleBlur);
+    const handleDragEnd = () => {
+      setIsDraggingOverVoid(false);
+      setDraggingId(null);
+      setDropTargetId(null);
+    };
+    window.addEventListener("dragend", handleDragEnd);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("dragend", handleDragEnd);
+    };
+  }, []);
+
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    const container = canvasContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    if (e.ctrlKey) {
+      const zoomFactor = 1.05;
+      const direction = e.deltaY < 0 ? 1 : -1;
+      const factor = direction > 0 ? zoomFactor : 1 / zoomFactor;
+
+      const nextZoom = Math.min(Math.max(zoom * factor, 0.15), 4.0);
+      const dx = mouseX - pan.x;
+      const dy = mouseY - pan.y;
+
+      setPan({
+        x: mouseX - dx * (nextZoom / zoom),
+        y: mouseY - dy * (nextZoom / zoom),
+      });
+      setZoom(nextZoom);
+    } else {
+      setPan(prev => ({
+        x: prev.x - e.deltaX,
+        y: prev.y - e.deltaY
+      }));
+    }
+  }, [zoom, pan, setZoom, setPan]);
+
+  useEffect(() => {
+    const container = canvasContainerRef.current;
+    if (!container) return;
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, [handleWheel]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    const isLeftClickOnEmptySpace = e.button === 0 && e.target === e.currentTarget;
+    const isMiddleClick = e.button === 1;
+    const shouldPan = isSpacePressed || isMiddleClick || isLeftClickOnEmptySpace;
+    if (shouldPan) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingPan(true);
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      dragStartPanRef.current = { ...pan };
+    }
+  }, [isSpacePressed, pan]);
+
+  useEffect(() => {
+    if (!isDraggingPan) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      setPan({
+        x: dragStartPanRef.current.x + dx,
+        y: dragStartPanRef.current.y + dy
+      });
+    };
+    const handleMouseUp = () => {
+      setIsDraggingPan(false);
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDraggingPan]);
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (editingElementId) return;
@@ -1554,12 +2157,9 @@ export default function Canvas() {
         (active.tagName === "INPUT" ||
           active.tagName === "TEXTAREA" ||
           (active as HTMLElement).isContentEditable);
-
       const cmd = e.metaKey || e.ctrlKey;
       const allSelected = getAllSelected();
       const hasSel = allSelected.length > 0;
-
-      // ── Delete / Backspace ────────────────────────────────────────────────
       if (
         (e.key === "Delete" || e.key === "Backspace") &&
         !isTyping &&
@@ -1574,17 +2174,12 @@ export default function Canvas() {
         );
         return;
       }
-
-      // ── Escape ────────────────────────────────────────────────────────────
       if (e.key === "Escape") {
         if ((selectedElementIds ?? []).length > 0) clearSelection();
         else selectElement(null);
         return;
       }
-
-      if (isTyping) return; // everything below is cmd-key — safe to skip when typing
-
-      // ── Ctrl/Cmd+Z  Undo ──────────────────────────────────────────────────
+      if (isTyping) return;
       if (cmd && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         if (undoable) {
@@ -1593,7 +2188,6 @@ export default function Canvas() {
         }
         return;
       }
-
       if ((cmd && e.shiftKey && e.key === "z") || (cmd && e.key === "y")) {
         e.preventDefault();
         if (redoable) {
@@ -1602,8 +2196,6 @@ export default function Canvas() {
         }
         return;
       }
-
-      // ── Ctrl/Cmd+A  Select all top-level ─────────────────────────────────
       if (cmd && e.key === "a") {
         e.preventDefault();
         const pg = getActivePage();
@@ -1611,8 +2203,6 @@ export default function Canvas() {
         showToast("Selected all");
         return;
       }
-
-      // ── Ctrl/Cmd+D  Duplicate ─────────────────────────────────────────────
       if (cmd && e.key === "d" && hasSel) {
         e.preventDefault();
         allSelected.forEach((id) => duplicateElement(id));
@@ -1621,8 +2211,6 @@ export default function Canvas() {
         );
         return;
       }
-
-      // ── Ctrl/Cmd+C  Copy ─────────────────────────────────────────────────
       if (cmd && e.key === "c" && hasSel) {
         e.preventDefault();
         const els = allSelected
@@ -1632,8 +2220,6 @@ export default function Canvas() {
         showToast(`Copied ${els.length} element${els.length > 1 ? "s" : ""}`);
         return;
       }
-
-      // ── Ctrl/Cmd+X  Cut ──────────────────────────────────────────────────
       if (cmd && e.key === "x" && hasSel) {
         e.preventDefault();
         const els = allSelected
@@ -1646,8 +2232,6 @@ export default function Canvas() {
         showToast(`Cut ${els.length} element${els.length > 1 ? "s" : ""}`);
         return;
       }
-
-      // ── Ctrl/Cmd+V  Paste ─────────────────────────────────────────────────
       if (cmd && e.key === "v") {
         e.preventDefault();
         const clip = readClipboard();
@@ -1655,7 +2239,6 @@ export default function Canvas() {
           showToast("Nothing to paste");
           return;
         }
-        // Clone again so you can paste multiple times with fresh IDs each time
         const toInsert = clip.map(deepCloneWithNewIds);
         toInsert.forEach((el) => addElement(el));
         showToast(
@@ -1663,15 +2246,12 @@ export default function Canvas() {
         );
         return;
       }
-
-      // ── Arrow keys  Nudge position ────────────────────────────────────────
-      // Works when element has position: absolute/fixed/relative/sticky
       if (
         ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) &&
         hasSel
       ) {
         e.preventDefault();
-        const delta = e.shiftKey ? 10 : 1; // Shift = 10px, plain = 1px
+        const delta = e.shiftKey ? 10 : 1;
         const dir = {
           ArrowUp: ["top", -delta],
           ArrowDown: ["top", delta],
@@ -1693,8 +2273,6 @@ export default function Canvas() {
         });
         return;
       }
-
-      // ── [ and ]  Move up/down in layer order ──────────────────────────────
       if ((e.key === "[" || e.key === "]") && hasSel) {
         e.preventDefault();
         const dir = e.key === "[" ? "up" : "down";
@@ -1705,8 +2283,6 @@ export default function Canvas() {
         showToast(e.key === "[" ? "Moved up" : "Moved down");
         return;
       }
-
-      // ── H  Toggle hidden ──────────────────────────────────────────────────
       if (e.key === "h" && hasSel) {
         e.preventDefault();
         allSelected.forEach((id) => {
@@ -1719,8 +2295,6 @@ export default function Canvas() {
         showToast("Toggled visibility");
         return;
       }
-
-      // ── L  Toggle locked ──────────────────────────────────────────────────
       if (e.key === "l" && hasSel) {
         e.preventDefault();
         allSelected.forEach((id) => {
@@ -1734,7 +2308,6 @@ export default function Canvas() {
         return;
       }
     };
-
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [
@@ -1765,16 +2338,6 @@ export default function Canvas() {
     setContextMenu(null);
   }, [selectElement, clearSelection, setEditingElement]);
 
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const [dropPos, setDropPos] = useState<
-    "top" | "bottom" | "left" | "right" | "inside"
-  >("inside");
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    elId: string;
-  } | null>(null);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, elId: string) => {
     e.preventDefault();
@@ -1787,6 +2350,7 @@ export default function Canvas() {
   const multiCount = (selectedElementIds ?? []).length;
 
   const sharedProps = {
+    zoom,
     draggingId,
     dropTargetId,
     dropPos,
@@ -1808,8 +2372,8 @@ export default function Canvas() {
       e.stopPropagation();
       setDropTargetId(id);
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const relX = (e.clientX - rect.left) / rect.width;
-      const relY = (e.clientY - rect.top) / rect.height;
+      const relX = (e.clientX - rect.left) / rect.width,
+        relY = (e.clientY - rect.top) / rect.height;
       const inCenter = relX > 0.25 && relX < 0.75 && relY > 0.25 && relY < 0.75;
       if (canHaveChildren && inCenter) setDropPos("inside");
       else if (pIsHorizontal) setDropPos(relX < 0.5 ? "left" : "right");
@@ -1846,27 +2410,77 @@ export default function Canvas() {
 
   return (
     <div
-      className="flex-1 overflow-y-auto bg-[#0a0a0a]"
-      style={{ padding: "38px" }}
+      ref={canvasContainerRef}
+      className="flex-1 overflow-hidden bg-[#0d0d0f] relative outline-none select-none"
+      style={{
+        cursor: isDraggingPan ? "grabbing" : "grab",
+        backgroundImage: showGrid
+          ? "linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px)"
+          : "none",
+        backgroundSize: "24px 24px",
+        backgroundPosition: "0 0",
+        backgroundColor: "#121214",
+      }}
       onClick={handleCanvasClick}
+      onMouseDown={handleMouseDown}
+      onDragEnter={() => setIsDraggingOverVoid(true)}
+      onDragOver={() => {
+        // Do not call e.preventDefault() here to prevent browser drop on empty space
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setIsDraggingOverVoid(false);
+        }
+      }}
+      onDrop={() => setIsDraggingOverVoid(false)}
+      onContextMenu={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          setContextMenu({ x: e.clientX, y: e.clientY, elId: "canvas" });
+        }
+      }}
     >
       <HoverActiveStyleSheet />
-
       {contextMenu && (
-        <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+        <ContextMenu
+          {...contextMenu}
+          onClose={() => setContextMenu(null)}
+          onClearCanvas={() => setShowClearConfirm(true)}
+          isolatedPageId={isolatedPageId}
+          setIsolatedPageId={setIsolatedPageId}
+        />
       )}
 
-      {/* Shortcut toast */}
+
+
       <ShortcutToast message={toast} visible={toastVisible} />
 
-      {/* ── Multi-select action bar ── */}
+      {isolatedPageId && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 rounded-full border border-blue-500/30 bg-[#121214]/90 backdrop-blur-xl shadow-2xl select-none pointer-events-auto transition-all duration-200 animate-in fade-in slide-in-from-top-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-white/80 font-bold uppercase tracking-wider">
+              Isolated View
+            </span>
+          </div>
+          <div className="w-px h-3 bg-white/10" />
+          <span className="text-[11px] text-white/50 font-medium font-sans">
+            {pages.find((p) => p.id === isolatedPageId)?.name || "Page"}
+          </span>
+          <button
+            onClick={() => setIsolatedPageId(null)}
+            className="text-[11px] text-blue-400 hover:text-blue-300 font-bold hover:bg-blue-500/10 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+          >
+            Show All Pages
+          </button>
+        </div>
+      )}
+
       {multiCount > 0 && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 shadow-2xl select-none"
           style={{ background: "#1a1a1a" }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Count badge */}
           <div className="flex items-center gap-1.5 mr-1">
             <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
             <span className="text-[11px] text-white/50 font-medium">
@@ -1903,89 +2517,265 @@ export default function Canvas() {
         </div>
       )}
 
+      {isDraggingOverVoid && (
+        <div className="absolute inset-0 bg-black/35 pointer-events-none z-10 transition-opacity duration-200" />
+      )}
+
       <div
         style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: "0 0",
+          position: "absolute",
           width: "100%",
-          maxWidth: 1600,
-          margin: "0 auto",
-          backgroundColor: hasElements ? "#ffffff" : "transparent",
-          boxShadow: hasElements ? "0 8px 60px rgba(0,0,0,0.55)" : "none",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: hasElements ? 0 : "calc(100vh - 200px)",
-          transition: "background-color 0.25s, box-shadow 0.25s",
-          isolation: "isolate",
-          position: "relative",
-        }}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          const newType = e.dataTransfer.getData("elementType") as ElementType;
-          const compId = e.dataTransfer.getData("componentId");
-          if (compId) insertComponent(compId);
-          else if (newType && !hasElements) addElement(defaultElement(newType));
+          height: "100%",
+          pointerEvents: "none",
+          transition: animateTransform ? "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
         }}
       >
-        {!hasElements ? (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 80,
-              textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 16,
-                marginBottom: 20,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Plus size={22} color="rgba(255,255,255,0.18)" />
-            </div>
-            <p
-              style={{
-                fontSize: 18,
-                fontWeight: 700,
-                color: "rgba(255,255,255,0.65)",
-                marginBottom: 8,
-              }}
-            >
-              Start building
-            </p>
-            <p
-              style={{
-                fontSize: 13,
-                color: "rgba(255,255,255,0.22)",
-                maxWidth: 260,
-                lineHeight: 1.7,
-              }}
-            >
-              Drag elements from the left panel onto the canvas
-            </p>
-          </div>
-        ) : (
-          page.elements.map((el, index) => (
-            <RenderElement
-              key={el.id}
-              el={el}
-              index={index}
-              parentId={undefined}
-              parentIsHorizontal={false}
-              {...sharedProps}
-            />
-          ))
-        )}
+        {/* Render spacing overlays inside the scaled container */}
+        {showPadding && <SpacingOverlay mode="padding" />}
+        {showMargin && <SpacingOverlay mode="margin" />}
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: "120px",
+            padding: "160px",
+            pointerEvents: "none",
+          }}
+        >
+          {(isolatedPageId ? pages.filter((p) => p.id === isolatedPageId) : pages).map((pg) => {
+            const hasElements = pg.elements.length > 0;
+            return (
+              <div
+                key={pg.id}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                  pointerEvents: "none",
+                }}
+              >
+                {/* Page Title Header */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    pointerEvents: "auto",
+                    color: pg.id === activePageId ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.35)",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    fontFamily: "sans-serif",
+                    padding: "0 4px",
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>{pg.name}</span>
+                    <span className="text-[10px] text-white/20 font-mono">({pg.slug})</span>
+                  </div>
+                  {!isolatedPageId && (
+                    <button
+                      onClick={() => {
+                        setIsolatedPageId(pg.id);
+                        setActivePage(pg.id);
+                      }}
+                      className="text-[10px] text-blue-400 hover:text-blue-300 font-bold hover:bg-blue-500/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                    >
+                      Focus
+                    </button>
+                  )}
+                </div>
+
+                <div
+                  data-artboard="true"
+                  data-artboard-id={pg.id}
+                  style={{
+                    pointerEvents: "auto",
+                    width:
+                      canvasBreakpoint === "tablet"
+                        ? "768px"
+                        : canvasBreakpoint === "mobile"
+                          ? "390px"
+                          : "1280px",
+                    backgroundColor: "transparent",
+                    boxShadow: "none",
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: hasElements ? "0px" : "550px",
+                    height: "auto",
+                    borderRadius: "4px",
+                    transition:
+                      "width 0.3s cubic-bezier(0.4,0,0.2,1), background-color 0.25s, box-shadow 0.25s",
+                    position: "relative",
+                    cursor: "default",
+                    overflowX: "hidden",
+                    border: pg.id === activePageId ? "1px solid rgba(13,153,255,0.45)" : "1px dashed rgba(255,255,255,0.08)",
+                    outline: pg.id === activePageId ? "4px solid rgba(13,153,255,0.08)" : "none",
+                    outlineOffset: "2px",
+                  }}
+                  onDragEnter={(e) => {
+                    e.stopPropagation();
+                    setIsDraggingOverVoid(false);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingOverVoid(false);
+                    if (activePageId !== pg.id) {
+                      setActivePage(pg.id);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    e.stopPropagation();
+                    setIsDraggingOverVoid(true);
+                  }}
+                  onDrop={(e) => {
+                    setIsDraggingOverVoid(false);
+                    const newType = e.dataTransfer.getData("elementType") as ElementType;
+                    const compId = e.dataTransfer.getData("componentId");
+                    const sourceId = e.dataTransfer.getData("sourceElementId");
+                    if (compId) insertComponent(compId);
+                    else if (newType && !hasElements) addElement(defaultElement(newType));
+                    else if (sourceId) reorderElement(sourceId, undefined, undefined);
+                  }}
+                  onClick={(e) => {
+                    if (activePageId !== pg.id) {
+                      setActivePage(pg.id);
+                    }
+                  }}
+                >
+                  {!hasElements ? (
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 80,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 16,
+                          marginBottom: 20,
+                          background: "rgba(255,255,255,0.04)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Plus size={22} color="rgba(255,255,255,0.18)" />
+                      </div>
+                      <p
+                        style={{
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color: "rgba(255,255,255,0.65)",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Start building
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "rgba(255,255,255,0.22)",
+                          maxWidth: 260,
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        Drag elements from the left panel onto the canvas
+                      </p>
+                    </div>
+                  ) : (
+                    pg.elements.map((el, index) => (
+                      <RenderElement
+                        key={el.id}
+                        el={el}
+                        index={index}
+                        parentId={undefined}
+                        pageId={pg.id}
+                        parentIsHorizontal={false}
+                        {...sharedProps}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Figma-like floating zoom indicator */}
+      <div className="absolute right-6 bottom-6 z-50 flex items-center gap-1.5 bg-panel-bg/90 backdrop-blur-xl border border-panel-border rounded-xl p-1 shadow-[0_12px_32px_rgba(0,0,0,0.5)] select-none pointer-events-auto">
+        <button
+          onClick={() => {
+            setZoom(prev => Math.max(0.15, prev - 0.1));
+          }}
+          title="Zoom Out"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+        >
+          <Minus size={13} />
+        </button>
+        <span className="text-[11px] font-bold min-w-[42px] text-center text-white/80 font-mono">
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          onClick={() => {
+            setZoom(prev => Math.min(4.0, prev + 0.1));
+          }}
+          title="Zoom In"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+        >
+          <Plus size={13} />
+        </button>
+        <div className="w-px h-4 bg-white/10 mx-0.5" />
+        <button
+          onClick={fitArtboard}
+          title="Fit Artboard (Reset Pan/Zoom)"
+          className="px-2.5 h-7 flex items-center justify-center rounded-lg text-[10px] font-bold uppercase tracking-wider text-white/50 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+        >
+          Reset
+        </button>
+      </div>
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm select-none pointer-events-auto">
+          <div className="bg-[#18181b] border border-white/10 shadow-[0_24px_64px_rgba(0,0,0,0.8)] rounded-2xl p-6 max-w-[340px] w-full mx-4 flex flex-col gap-4 animate-in fade-in zoom-in duration-200">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-white">Clear canvas?</span>
+              <span className="text-xs text-white/50 leading-relaxed">
+                This will delete all elements from this page. This action cannot be undone.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 justify-end mt-2">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:text-white hover:bg-white/8 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  clearCanvas();
+                  setShowClearConfirm(false);
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer"
+              >
+                Clear Page
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

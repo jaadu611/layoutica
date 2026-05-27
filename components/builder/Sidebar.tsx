@@ -29,6 +29,10 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
+  BoxSelect,
   AlignLeft,
   Tag,
   Link2,
@@ -80,7 +84,7 @@ export const defaultElement = (
       styles: {
         display: "flex",
         flexDirection: "column",
-        padding: "48px 32px",
+        padding: "24px 32px",
       },
       children: [],
     },
@@ -133,7 +137,7 @@ export const defaultElement = (
       styles: {
         fontSize: "40px",
         fontWeight: "700",
-        color: "#111827",
+        color: "#f4f4f5",
         lineHeight: "1.2",
       },
     },
@@ -143,7 +147,7 @@ export const defaultElement = (
       styles: {
         fontSize: "28px",
         fontWeight: "700",
-        color: "#111827",
+        color: "#f4f4f5",
         lineHeight: "1.3",
       },
     },
@@ -153,7 +157,7 @@ export const defaultElement = (
       styles: {
         fontSize: "20px",
         fontWeight: "600",
-        color: "#111827",
+        color: "#f4f4f5",
         lineHeight: "1.4",
       },
     },
@@ -162,7 +166,7 @@ export const defaultElement = (
       content: "Paragraph text. Write your content here.",
       styles: {
         fontSize: "16px",
-        color: "#4b5563",
+        color: "#a1a1aa",
         lineHeight: "1.7",
         maxWidth: "65ch",
       },
@@ -170,12 +174,12 @@ export const defaultElement = (
     text: {
       type: "text",
       content: "Text block. Click to edit.",
-      styles: { fontSize: "16px", color: "#374151", lineHeight: "1.6" },
+      styles: { fontSize: "16px", color: "#e4e4e7", lineHeight: "1.6" },
     },
     span: {
       type: "span",
       content: "Inline text",
-      styles: { fontSize: "16px", color: "#374151", display: "inline" },
+      styles: { fontSize: "16px", color: "#e4e4e7", display: "inline" },
     },
     link: {
       type: "link",
@@ -193,20 +197,20 @@ export const defaultElement = (
       content: "A quote worth remembering.",
       styles: {
         fontSize: "18px",
-        color: "#374151",
-        borderLeft: "4px solid #e5e7eb",
+        color: "#a1a1aa",
+        borderLeft: "4px solid #3f3f46",
         paddingLeft: "16px",
         fontStyle: "italic",
       },
     },
     code: {
       type: "code",
-      content: "const hello = \'world\';",
+      content: "const hello = 'world';",
       styles: {
-        fontFamily: "\'Courier New\', monospace",
+        fontFamily: "'Courier New', monospace",
         fontSize: "14px",
-        backgroundColor: "#f3f4f6",
-        color: "#111827",
+        backgroundColor: "#27272a",
+        color: "#f4f4f5",
         padding: "2px 6px",
         borderRadius: "4px",
         display: "inline-block",
@@ -216,7 +220,7 @@ export const defaultElement = (
       type: "pre",
       content: "// code block\nconst x = 1;",
       styles: {
-        fontFamily: "\'Courier New\', monospace",
+        fontFamily: "'Courier New', monospace",
         fontSize: "14px",
         backgroundColor: "#1e1e2e",
         color: "#cdd6f4",
@@ -232,7 +236,7 @@ export const defaultElement = (
       listItems: ["First item", "Second item", "Third item"],
       styles: {
         fontSize: "16px",
-        color: "#374151",
+        color: "#e4e4e7",
         lineHeight: "1.7",
         paddingLeft: "20px",
         listStyleType: "disc",
@@ -243,7 +247,7 @@ export const defaultElement = (
       listItems: ["First item", "Second item", "Third item"],
       styles: {
         fontSize: "16px",
-        color: "#374151",
+        color: "#e4e4e7",
         lineHeight: "1.7",
         paddingLeft: "20px",
         listStyleType: "decimal",
@@ -251,7 +255,7 @@ export const defaultElement = (
     },
     image: {
       type: "image",
-      src: "https://placehold.co/800x400/f3f4f6/9ca3af?text=Image",
+      src: "https://placehold.co/800x400/18181b/a1a1aa?text=Image",
       alt: "Placeholder image",
       styles: { width: "100%", display: "block" },
     },
@@ -281,8 +285,8 @@ export const defaultElement = (
       type: "badge",
       content: "New",
       styles: {
-        backgroundColor: "#eff6ff",
-        color: "#3b82f6",
+        backgroundColor: "rgba(59, 130, 246, 0.15)",
+        color: "#60a5fa",
         fontSize: "12px",
         fontWeight: "600",
         padding: "4px 12px",
@@ -293,10 +297,10 @@ export const defaultElement = (
     divider: {
       type: "divider",
       styles: {
-        borderTop: "1px solid #e5e7eb",
+        borderTop: "1px solid rgba(255, 255, 255, 0.08)",
         borderWidth: "1px",
         borderStyle: "solid",
-        borderColor: "#e5e7eb",
+        borderColor: "rgba(255, 255, 255, 0.08)",
         width: "100%",
       },
     },
@@ -306,7 +310,7 @@ export const defaultElement = (
       content: "Button",
       href: "#",
       styles: {
-        backgroundColor: "#111827",
+        backgroundColor: "#0d99ff",
         color: "#ffffff",
         padding: "10px 24px",
         borderRadius: "6px",
@@ -325,10 +329,10 @@ export const defaultElement = (
         borderRadius: "6px",
         borderWidth: "1px",
         borderStyle: "solid",
-        borderColor: "#d1d5db",
+        borderColor: "rgba(255, 255, 255, 0.1)",
         fontSize: "14px",
-        color: "#111827",
-        backgroundColor: "#ffffff",
+        color: "#f4f4f5",
+        backgroundColor: "#18181b",
       },
     },
     textarea: {
@@ -340,10 +344,10 @@ export const defaultElement = (
         borderRadius: "6px",
         borderWidth: "1px",
         borderStyle: "solid",
-        borderColor: "#d1d5db",
+        borderColor: "rgba(255, 255, 255, 0.1)",
         fontSize: "14px",
-        color: "#111827",
-        backgroundColor: "#ffffff",
+        color: "#f4f4f5",
+        backgroundColor: "#18181b",
         minHeight: "100px",
         resize: "vertical",
       },
@@ -357,10 +361,10 @@ export const defaultElement = (
         borderRadius: "6px",
         borderWidth: "1px",
         borderStyle: "solid",
-        borderColor: "#d1d5db",
+        borderColor: "rgba(255, 255, 255, 0.1)",
         fontSize: "14px",
-        color: "#111827",
-        backgroundColor: "#ffffff",
+        color: "#f4f4f5",
+        backgroundColor: "#18181b",
       },
     },
     checkbox: {
@@ -372,7 +376,7 @@ export const defaultElement = (
         alignItems: "center",
         gap: "8px",
         fontSize: "14px",
-        color: "#374151",
+        color: "#e4e4e7",
         cursor: "pointer",
       },
     },
@@ -384,7 +388,7 @@ export const defaultElement = (
         alignItems: "center",
         gap: "8px",
         fontSize: "14px",
-        color: "#374151",
+        color: "#e4e4e7",
         cursor: "pointer",
       },
     },
@@ -403,7 +407,7 @@ export const defaultElement = (
       type: "time",
       content: "January 1, 2025",
       dateTime: "2025-01-01",
-      styles: { fontSize: "14px", color: "#6b7280" },
+      styles: { fontSize: "14px", color: "#a1a1aa" },
     },
     progress: {
       type: "progress",
@@ -422,22 +426,22 @@ export const defaultElement = (
       content: "Click to expand",
       styles: {
         fontSize: "15px",
-        color: "#111827",
+        color: "#f4f4f5",
         padding: "8px 0",
         cursor: "pointer",
       },
     },
     kbd: {
       type: "kbd",
-      content: "\u2318K",
+      content: "⌘K",
       styles: {
         fontFamily: "monospace",
         fontSize: "12px",
-        backgroundColor: "#f3f4f6",
-        color: "#111827",
+        backgroundColor: "#27272a",
+        color: "#f4f4f5",
         padding: "2px 6px",
         borderRadius: "4px",
-        border: "1px solid #d1d5db",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
         display: "inline-block",
       },
     },
@@ -445,8 +449,8 @@ export const defaultElement = (
       type: "mark",
       content: "highlighted text",
       styles: {
-        backgroundColor: "#fef08a",
-        color: "#111827",
+        backgroundColor: "#ca8a04",
+        color: "#ffffff",
         padding: "0 2px",
         borderRadius: "2px",
       },
@@ -454,11 +458,11 @@ export const defaultElement = (
     card: {
       type: "card",
       styles: {
-        backgroundColor: "#ffffff",
+        backgroundColor: "#18181b",
         borderRadius: "12px",
-        border: "1px solid #e5e7eb",
+        border: "1px solid rgba(255, 255, 255, 0.08)",
         padding: "24px",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
         display: "flex",
         flexDirection: "column",
         gap: "12px",
@@ -488,11 +492,11 @@ export const defaultElement = (
       content: "This is an alert message.",
       alertVariant: "info",
       styles: {
-        backgroundColor: "#eff6ff",
-        color: "#1d4ed8",
+        backgroundColor: "rgba(59, 130, 246, 0.15)",
+        color: "#60a5fa",
         padding: "12px 16px",
         borderRadius: "8px",
-        border: "1px solid #bfdbfe",
+        border: "1px solid rgba(59, 130, 246, 0.3)",
         fontSize: "14px",
         display: "flex",
         alignItems: "center",
@@ -508,6 +512,94 @@ export const defaultElement = (
         margin: "0",
       },
       children: [],
+    },
+    heading4: {
+      type: "heading4",
+      content: "Heading 4",
+      styles: {
+        fontSize: "18px",
+        fontWeight: "600",
+        color: "#f4f4f5",
+        lineHeight: "1.4",
+      },
+    },
+    heading5: {
+      type: "heading5",
+      content: "Heading 5",
+      styles: {
+        fontSize: "16px",
+        fontWeight: "600",
+        color: "#f4f4f5",
+        lineHeight: "1.4",
+      },
+    },
+    heading6: {
+      type: "heading6",
+      content: "Heading 6",
+      styles: {
+        fontSize: "14px",
+        fontWeight: "600",
+        color: "#f4f4f5",
+        lineHeight: "1.4",
+      },
+    },
+    label: {
+      type: "label",
+      content: "Label Text",
+      styles: {
+        fontSize: "14px",
+        color: "#e4e4e7",
+        display: "inline-block",
+        fontWeight: "500",
+      },
+    },
+    fieldset: {
+      type: "fieldset",
+      styles: {
+        display: "block",
+        padding: "16px",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
+        borderRadius: "6px",
+        marginTop: "8px",
+        marginBottom: "8px",
+      },
+      children: [],
+    },
+    legend: {
+      type: "legend",
+      content: "Legend/Title",
+      styles: {
+        fontSize: "14px",
+        fontWeight: "600",
+        color: "#f4f4f5",
+        paddingLeft: "8px",
+        paddingRight: "8px",
+      },
+    },
+    dialog: {
+      type: "dialog",
+      open: false,
+      styles: {
+        display: "block",
+        backgroundColor: "#18181b",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
+        borderRadius: "8px",
+        padding: "24px",
+        maxWidth: "500px",
+        width: "100%",
+      },
+      children: [],
+    },
+    canvas: {
+      type: "canvas",
+      styles: {
+        width: "100%",
+        height: "200px",
+        backgroundColor: "#18181b",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
+        borderRadius: "6px",
+        display: "block",
+      },
     },
   };
   return map[type];
@@ -530,6 +622,8 @@ const GROUPS: ElementGroup[] = [
       { type: "nav", label: "Nav", icon: <Navigation size={13} /> },
       { type: "form", label: "Form", icon: <FormInput size={13} /> },
       { type: "footer", label: "Footer", icon: <Rows size={13} /> },
+      { type: "fieldset", label: "Fieldset", icon: <BoxSelect size={13} /> },
+      { type: "dialog", label: "Dialog", icon: <BoxSelect size={13} /> },
     ],
   },
   {
@@ -539,6 +633,9 @@ const GROUPS: ElementGroup[] = [
       { type: "heading", label: "H1", icon: <Heading1 size={13} /> },
       { type: "heading2", label: "H2", icon: <Heading2 size={13} /> },
       { type: "heading3", label: "H3", icon: <Heading3 size={13} /> },
+      { type: "heading4", label: "H4", icon: <Heading4 size={13} /> },
+      { type: "heading5", label: "H5", icon: <Heading5 size={13} /> },
+      { type: "heading6", label: "H6", icon: <Heading6 size={13} /> },
       { type: "paragraph", label: "Paragraph", icon: <AlignLeft size={13} /> },
       { type: "text", label: "Text", icon: <Type size={13} /> },
       { type: "span", label: "Span", icon: <Bold size={13} /> },
@@ -570,6 +667,7 @@ const GROUPS: ElementGroup[] = [
       { type: "audio", label: "Audio", icon: <AudioLines size={13} /> },
       { type: "iframe", label: "iFrame", icon: <MonitorPlay size={13} /> },
       { type: "icon", label: "Icon", icon: <Smile size={13} /> },
+      { type: "canvas", label: "Canvas", icon: <Frame size={13} /> },
     ],
   },
   {
@@ -586,6 +684,8 @@ const GROUPS: ElementGroup[] = [
       { type: "select", label: "Select", icon: <ListFilter size={13} /> },
       { type: "checkbox", label: "Checkbox", icon: <CheckSquare size={13} /> },
       { type: "radio", label: "Radio", icon: <CircleDot size={13} /> },
+      { type: "label", label: "Label", icon: <Tag size={13} /> },
+      { type: "legend", label: "Legend", icon: <Type size={13} /> },
     ],
   },
   {
@@ -630,6 +730,13 @@ function getElementIcon(type: string, size = 11) {
   if (type === "heading") return <Heading1 {...p} />;
   if (type === "heading2") return <Heading2 {...p} />;
   if (type === "heading3") return <Heading3 {...p} />;
+  if (type === "heading4") return <Heading4 {...p} />;
+  if (type === "heading5") return <Heading5 {...p} />;
+  if (type === "heading6") return <Heading6 {...p} />;
+  if (type === "label") return <Tag {...p} />;
+  if (type === "fieldset" || type === "dialog") return <BoxSelect {...p} />;
+  if (type === "legend") return <Type {...p} />;
+  if (type === "canvas") return <Frame {...p} />;
   if (type === "paragraph") return <AlignLeft {...p} />;
   if (type === "text") return <Type {...p} />;
   if (type === "span") return <Bold {...p} />;
@@ -1197,7 +1304,7 @@ export default function Sidebar() {
 
   return (
     <div className="w-full flex-1 flex flex-col min-h-0 overflow-hidden select-none">
-      <div className="flex border-b border-[#383838] h-11 px-2 shrink-0">
+      <div className="flex border-b border-panel-border h-11 px-2 shrink-0">
         {(["layers", "assets", "pages"] as const).map((t) => (
           <button
             key={t}
@@ -1215,7 +1322,7 @@ export default function Sidebar() {
       <div className="flex-1 overflow-y-auto w-full min-h-0">
         {tab === "layers" && (
           <DragCtx.Provider value={dragCtx}>
-            <div className="px-2 pt-2 pb-1 border-b border-[#333] shrink-0">
+            <div className="px-2 pt-2 pb-1 border-b border-panel-border shrink-0">
               <div className="relative">
                 <Search
                   size={10}
@@ -1225,8 +1332,8 @@ export default function Sidebar() {
                   ref={searchRef}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search layers\u2026 (\u2318F)"
-                  className="w-full text-[11px] bg-[#222] border border-white/8 hover:border-white/15 focus:border-blue-500/50 rounded pl-6 pr-6 py-1 outline-none text-white placeholder-white/20 transition-all"
+                  placeholder="Search layers\u2026"
+                  className="w-full text-[11px] bg-app-bg border border-white/8 hover:border-white/15 focus:border-blue-500/50 rounded pl-6 pr-6 py-1 outline-none text-white placeholder-white/20 transition-all"
                 />
                 {search && (
                   <button
@@ -1384,19 +1491,19 @@ export default function Sidebar() {
                 </div>
               </div>
             ))}
-            <div className="mt-4 flex gap-1 px-1">
+            <div className="mt-4 flex gap-1.5 px-1 items-center">
               <input
                 type="text"
                 placeholder="New page..."
                 value={newPageName}
                 onChange={(e) => setNewPageName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddPage()}
-                className="flex-1 text-[11px] bg-white/5 border border-white/10 rounded px-2 py-1.5 outline-none focus:border-white/20 text-white placeholder-white/20 cursor-text"
+                className="flex-1 min-w-0 text-[11px] bg-white/5 border border-white/10 rounded-md px-2.5 py-1.5 outline-none focus:border-white/20 text-white placeholder-white/20 cursor-text transition-all"
               />
               <button
                 onClick={handleAddPage}
                 disabled={!newPageName.trim()}
-                className="bg-white/5 hover:bg-white/10 text-white/40 p-1.5 rounded disabled:opacity-20 transition-colors cursor-pointer"
+                className="bg-white/5 hover:bg-white/10 text-white/40 p-1.5 rounded-md disabled:opacity-20 transition-colors cursor-pointer shrink-0"
               >
                 <Plus size={14} />
               </button>

@@ -467,8 +467,8 @@ export default function CodeExportModal({ files, onClose }: Props) {
         <div
           className="cem-overlay flex overflow-hidden"
           style={{
-            background: "#2c2c2c",
-            border: "1px solid #383838",
+            background: "var(--panel-bg)",
+            border: "1px solid var(--panel-border)",
             borderRadius: 16,
             boxShadow: "0 40px 100px rgba(0,0,0,0.8)",
             width: "min(1020px, 96vw)",
@@ -481,14 +481,14 @@ export default function CodeExportModal({ files, onClose }: Props) {
             className="flex flex-col shrink-0"
             style={{
               width: 210,
-              borderRight: "1px solid #383838",
-              background: "#262626",
+              borderRight: "1px solid var(--panel-border)",
+              background: "var(--app-bg)",
             }}
           >
             <div
               style={{
                 padding: "16px 14px 12px",
-                borderBottom: "1px solid #383838",
+                borderBottom: "1px solid var(--panel-border)",
               }}
             >
               <div className="flex items-center gap-2 mb-4">
@@ -624,7 +624,7 @@ export default function CodeExportModal({ files, onClose }: Props) {
               className="flex items-center shrink-0 gap-3"
               style={{
                 padding: "10px 18px",
-                borderBottom: "1px solid #383838",
+                borderBottom: "1px solid var(--panel-border)",
                 minHeight: 50,
               }}
             >
@@ -751,7 +751,7 @@ export default function CodeExportModal({ files, onClose }: Props) {
 
             <div
               className="flex-1 overflow-auto min-h-0"
-              style={{ background: tab === "browse" ? "#252525" : "#2c2c2c" }}
+              style={{ background: tab === "browse" ? "var(--app-bg)" : "var(--panel-bg)" }}
             >
               {tab === "browse" &&
                 (activeContent ? (
@@ -768,7 +768,7 @@ export default function CodeExportModal({ files, onClose }: Props) {
                         flexShrink: 0,
                         padding: "0 14px 0 20px",
                         textAlign: "right",
-                        borderRight: "1px solid #383838",
+                        borderRight: "1px solid var(--panel-border)",
                       }}
                     >
                       {activeContent.split("\n").map((_, i) => (

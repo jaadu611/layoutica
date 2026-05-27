@@ -94,7 +94,7 @@ function Input({
       value={value?.toString() ?? ""}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full text-[11px] bg-[#1e1e1e] border border-white/10 hover:border-white/20 rounded px-2 py-1 outline-none focus:border-blue-500/60 focus:bg-[#252525] text-white placeholder-white/30 transition-all font-medium cursor-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      className="w-full text-[11px] bg-app-bg border border-white/10 hover:border-white/20 rounded px-2 py-1 outline-none focus:border-blue-500/60 focus:bg-panel-bg-hover text-white placeholder-white/30 transition-all font-medium cursor-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
     />
   );
 }
@@ -115,7 +115,7 @@ function Textarea({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={rows}
-      className="w-full text-[11px] bg-[#1e1e1e] border border-white/10 hover:border-white/20 rounded px-2 py-1.5 outline-none focus:border-blue-500/60 focus:bg-[#252525] text-white resize-none font-medium placeholder-white/30 cursor-text transition-all"
+      className="w-full text-[11px] bg-app-bg border border-white/10 hover:border-white/20 rounded px-2 py-1.5 outline-none focus:border-blue-500/60 focus:bg-panel-bg-hover text-white resize-none font-medium placeholder-white/30 cursor-text transition-all"
     />
   );
 }
@@ -280,8 +280,8 @@ function Select({
         ref={menuRef}
         style={{
           ...menuStyle,
-          background: "linear-gradient(145deg, #242424 0%, #1e1e1e 100%)",
-          border: "1px solid rgba(255,255,255,0.1)",
+          background: "linear-gradient(145deg, var(--panel-bg-hover) 0%, var(--app-bg) 100%)",
+          border: "1px solid var(--panel-border)",
           boxShadow:
             "0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
           borderRadius: 8,
@@ -325,7 +325,7 @@ function Select({
         ref={triggerRef}
         type="button"
         onClick={toggle}
-        className={`w-full flex items-center justify-between text-[11px] bg-[#1e1e1e] border ${open ? "border-blue-500/60 bg-[#252525]" : "border-white/10 hover:border-white/20"} rounded px-2 py-1 text-white font-medium transition-all cursor-pointer`}
+        className={`w-full flex items-center justify-between text-[11px] bg-app-bg border ${open ? "border-blue-500/60 bg-panel-bg-hover" : "border-white/10 hover:border-white/20"} rounded px-2 py-1 text-white font-medium transition-all cursor-pointer`}
       >
         <span className="truncate">{selected?.label ?? "—"}</span>
         <ChevronDown
@@ -538,7 +538,7 @@ function ElementHeader({
     setEditing(false);
   };
   return (
-    <div className="h-11 px-3 border-b border-[#383838] flex items-center justify-between bg-[#2c2c2c] shrink-0">
+    <div className="h-11 px-3 border-b border-panel-border flex items-center justify-between bg-panel-bg shrink-0">
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <Layers className="w-3 h-3 text-blue-400/80 shrink-0" />
         {editing ? (
@@ -587,7 +587,7 @@ function StateSelectorBar({
   hasOverrides: boolean;
 }) {
   return (
-    <div className="flex items-center gap-1 px-3 py-2 border-b border-[#383838] bg-[#272727] shrink-0">
+    <div className="flex items-center gap-1 px-3 py-2 border-b border-panel-border bg-panel-bg shrink-0">
       {STYLING_STATES.map((s) => (
         <button
           key={s}
@@ -610,6 +610,27 @@ function StateSelectorBar({
       )}
     </div>
   );
+}
+
+function parseShorthand(val: string): { top: string; right: string; bottom: string; left: string } {
+  const parts = val.trim().split(/\s+/).filter(Boolean);
+  let top = "0px", right = "0px", bottom = "0px", left = "0px";
+  if (parts.length === 1) {
+    top = right = bottom = left = parts[0];
+  } else if (parts.length === 2) {
+    top = bottom = parts[0];
+    right = left = parts[1];
+  } else if (parts.length === 3) {
+    top = parts[0];
+    right = left = parts[1];
+    bottom = parts[2];
+  } else if (parts.length >= 4) {
+    top = parts[0];
+    right = parts[1];
+    bottom = parts[2];
+    left = parts[3];
+  }
+  return { top, right, bottom, left };
 }
 
 // ─── Main Panel ───────────────────────────────────────────────────────────────
@@ -651,7 +672,7 @@ export default function PropertiesPanel() {
 
   if (!el)
     return (
-      <div className="w-[240px] border-l border-[#383838] bg-[#2c2c2c] flex flex-col items-center justify-center p-6 text-center h-full shrink-0">
+      <div className="w-[240px] border-l border-panel-border bg-panel-bg flex flex-col items-center justify-center p-6 text-center h-full shrink-0">
         <div className="w-8 h-8 rounded-lg bg-white/4 flex items-center justify-center mb-3">
           <MousePointer2 className="w-4 h-4 text-white/20" />
         </div>
@@ -757,12 +778,16 @@ export default function PropertiesPanel() {
     "heading",
     "heading2",
     "heading3",
+    "heading4",
+    "heading5",
+    "heading6",
     "text",
     "paragraph",
     "badge",
     "blockquote",
     "code",
     "pre",
+    "legend",
   ].includes(el.type);
   const isLayout = [
     "div",
@@ -775,10 +800,12 @@ export default function PropertiesPanel() {
     "nav",
     "container",
     "flex",
+    "fieldset",
+    "dialog",
   ].includes(el.type);
 
   return (
-    <div className="w-[240px] border-l border-[#383838] bg-[#2c2c2c] flex flex-col shrink-0 overflow-hidden select-none h-full">
+    <div className="w-[240px] border-l border-panel-border bg-panel-bg flex flex-col shrink-0 overflow-hidden select-none h-full">
       <ElementHeader
         el={el}
         onRename={(name) =>
@@ -891,6 +918,9 @@ export default function PropertiesPanel() {
           "heading",
           "heading2",
           "heading3",
+          "heading4",
+          "heading5",
+          "heading6",
           "text",
           "paragraph",
           "span",
@@ -898,6 +928,8 @@ export default function PropertiesPanel() {
           "blockquote",
           "code",
           "pre",
+          "label",
+          "legend",
         ].includes(el.type) && (
           <Section title="Content">
             <Textarea
@@ -1282,6 +1314,32 @@ export default function PropertiesPanel() {
                 placeholder="Click to expand"
               />
             </Field>
+            <div className="flex items-center justify-between px-1">
+              <Label>Open by default</Label>
+              <button
+                onClick={() => update("open", !el.open)}
+                className={`w-8 h-4 rounded-full transition-colors relative ${el.open ? "bg-blue-500" : "bg-white/10"}`}
+              >
+                <div
+                  className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${el.open ? "left-4.5" : "left-0.5"}`}
+                />
+              </button>
+            </div>
+          </Section>
+        )}
+        {el.type === "label" && (
+          <Section title="Label Settings">
+            <Field label="For (Input ID/Name)">
+              <Input
+                value={el.fieldName || ""}
+                onChange={(v) => update("fieldName", v)}
+                placeholder="input-id"
+              />
+            </Field>
+          </Section>
+        )}
+        {el.type === "dialog" && (
+          <Section title="Dialog Settings">
             <div className="flex items-center justify-between px-1">
               <Label>Open by default</Label>
               <button
@@ -1684,7 +1742,39 @@ export default function PropertiesPanel() {
             <div className="flex items-center justify-between mb-1.5">
               <Label>Padding</Label>
               <button
-                onClick={() => setPadLinked(!padLinked)}
+                onClick={() => {
+                  const nextLinked = !padLinked;
+                  setPadLinked(nextLinked);
+                  if (!nextLinked) {
+                    const currentVal = gsv("padding") || "";
+                    const { top, right, bottom, left } = parseShorthand(String(currentVal));
+                    updateElement(el.id, {
+                      styles: {
+                        ...el.styles,
+                        paddingTop: top,
+                        paddingRight: right,
+                        paddingBottom: bottom,
+                        paddingLeft: left,
+                      }
+                    }, stylingState);
+                  } else {
+                    const t = gsv("paddingTop") || "0px";
+                    const r = gsv("paddingRight") || "0px";
+                    const b = gsv("paddingBottom") || "0px";
+                    const l = gsv("paddingLeft") || "0px";
+                    let shorthand = "";
+                    if (t === r && r === b && b === l) shorthand = t;
+                    else if (t === b && r === l) shorthand = `${t} ${r}`;
+                    else if (r === l) shorthand = `${t} ${r} ${b}`;
+                    else shorthand = `${t} ${r} ${b} ${l}`;
+                    updateElement(el.id, {
+                      styles: {
+                        ...el.styles,
+                        padding: shorthand,
+                      }
+                    }, stylingState);
+                  }
+                }}
                 className="text-white/20 hover:text-blue-400 transition-colors cursor-pointer"
               >
                 {padLinked ? (
@@ -1729,7 +1819,39 @@ export default function PropertiesPanel() {
             <div className="flex items-center justify-between mb-1.5">
               <Label>Margin</Label>
               <button
-                onClick={() => setMarLinked(!marLinked)}
+                onClick={() => {
+                  const nextLinked = !marLinked;
+                  setMarLinked(nextLinked);
+                  if (!nextLinked) {
+                    const currentVal = gsv("margin") || "";
+                    const { top, right, bottom, left } = parseShorthand(String(currentVal));
+                    updateElement(el.id, {
+                      styles: {
+                        ...el.styles,
+                        marginTop: top,
+                        marginRight: right,
+                        marginBottom: bottom,
+                        marginLeft: left,
+                      }
+                    }, stylingState);
+                  } else {
+                    const t = gsv("marginTop") || "0px";
+                    const r = gsv("marginRight") || "0px";
+                    const b = gsv("marginBottom") || "0px";
+                    const l = gsv("marginLeft") || "0px";
+                    let shorthand = "";
+                    if (t === r && r === b && b === l) shorthand = t;
+                    else if (t === b && r === l) shorthand = `${t} ${r}`;
+                    else if (r === l) shorthand = `${t} ${r} ${b}`;
+                    else shorthand = `${t} ${r} ${b} ${l}`;
+                    updateElement(el.id, {
+                      styles: {
+                        ...el.styles,
+                        margin: shorthand,
+                      }
+                    }, stylingState);
+                  }
+                }}
                 className="text-white/20 hover:text-blue-400 transition-colors cursor-pointer"
               >
                 {marLinked ? (
@@ -1872,7 +1994,7 @@ export default function PropertiesPanel() {
                       type="button"
                       title={opt.title}
                       onClick={() => updateStyle("justifyContent", opt.id)}
-                      className={`h-7 rounded flex items-center justify-center transition-all cursor-pointer ${gsv("justifyContent") === opt.id ? "bg-[#333] text-white shadow-sm" : "text-white/20 hover:text-white/40 hover:bg-white/5"}`}
+                      className={`h-7 rounded flex items-center justify-center transition-all cursor-pointer ${gsv("justifyContent") === opt.id ? "bg-panel-bg-hover text-white shadow-sm" : "text-white/20 hover:text-white/40 hover:bg-white/5"}`}
                     >
                       {opt.icon}
                     </button>
@@ -1913,7 +2035,7 @@ export default function PropertiesPanel() {
                       type="button"
                       title={opt.title}
                       onClick={() => updateStyle("alignItems", opt.id)}
-                      className={`h-7 rounded flex items-center justify-center transition-all cursor-pointer ${gsv("alignItems") === opt.id ? "bg-[#333] text-white shadow-sm" : "text-white/20 hover:text-white/40 hover:bg-white/5"}`}
+                      className={`h-7 rounded flex items-center justify-center transition-all cursor-pointer ${gsv("alignItems") === opt.id ? "bg-panel-bg-hover text-white shadow-sm" : "text-white/20 hover:text-white/40 hover:bg-white/5"}`}
                     >
                       {opt.icon}
                     </button>

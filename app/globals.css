@@ -1,5 +1,29 @@
 @import "tailwindcss";
 
+@theme {
+  --color-app-bg: var(--app-bg);
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-bg-hover: var(--panel-bg-hover);
+  --color-panel-border: var(--panel-border);
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-accent-blue: var(--accent);
+  --color-accent-blue-hover: var(--accent-hover);
+  --color-active-bg: var(--active-bg);
+}
+
+:root {
+  --app-bg: #121214;
+  --panel-bg: #1e1e24;
+  --panel-bg-hover: #2b2b35;
+  --panel-border: rgba(255, 255, 255, 0.06);
+  --text-primary: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --accent: #0d99ff;
+  --accent-hover: #0b8ae6;
+  --active-bg: rgba(255, 255, 255, 0.08);
+}
+
 * {
   ::-webkit-scrollbar {
     display: none;

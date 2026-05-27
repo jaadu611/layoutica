@@ -7,7 +7,89 @@ import {
   HistoryEntry,
   Page,
   SavedComponent,
+  CanvasBreakpoint,
+  CanvasBackground,
 } from "./types";
+import { DesignTokens } from "./projectSaverLoader";
+
+const DEFAULT_TOKENS: DesignTokens = {
+  colors: [
+    { id: "c1", name: "Primary", value: "#0d99ff" },
+    { id: "c2", name: "Secondary", value: "#111827" },
+    { id: "c3", name: "Accent", value: "#f59e0b" },
+    { id: "c4", name: "Surface", value: "#f9fafb" },
+    { id: "c5", name: "Text", value: "#374151" },
+    { id: "c6", name: "Muted", value: "#9ca3af" },
+  ],
+  typography: [
+    {
+      id: "t1",
+      name: "Display",
+      fontSize: "56px",
+      fontWeight: "700",
+      lineHeight: "1.1",
+      letterSpacing: "-0.02em",
+    },
+    {
+      id: "t2",
+      name: "H1",
+      fontSize: "40px",
+      fontWeight: "700",
+      lineHeight: "1.2",
+      letterSpacing: "-0.01em",
+    },
+    {
+      id: "t3",
+      name: "H2",
+      fontSize: "28px",
+      fontWeight: "600",
+      lineHeight: "1.3",
+      letterSpacing: "0",
+    },
+    {
+      id: "t4",
+      name: "H3",
+      fontSize: "20px",
+      fontWeight: "600",
+      lineHeight: "1.4",
+      letterSpacing: "0",
+    },
+    {
+      id: "t5",
+      name: "Body",
+      fontSize: "16px",
+      fontWeight: "400",
+      lineHeight: "1.7",
+      letterSpacing: "0",
+    },
+    {
+      id: "t6",
+      name: "Small",
+      fontSize: "13px",
+      fontWeight: "400",
+      lineHeight: "1.5",
+      letterSpacing: "0",
+    },
+    {
+      id: "t7",
+      name: "Caption",
+      fontSize: "11px",
+      fontWeight: "500",
+      lineHeight: "1.4",
+      letterSpacing: "0.04em",
+    },
+  ],
+};
+
+function loadTokens(): DesignTokens {
+  if (typeof window === "undefined") return DEFAULT_TOKENS;
+  try {
+    const raw = localStorage.getItem("layoutica-design-tokens");
+    return raw ? JSON.parse(raw) : DEFAULT_TOKENS;
+  } catch {
+    return DEFAULT_TOKENS;
+  }
+}
 
 const MAX_HISTORY = 50;
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -56,12 +138,13 @@ const defaultPage: Page = {
       type: "navbar",
       content: "Brand",
       styles: {
-        backgroundColor: "#ffffff",
+        backgroundColor: "#18181b",
+        color: "#f4f4f5",
         padding: "0px 32px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        borderBottom: "1px solid #e5e7eb",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
         height: "64px",
         width: "100%",
       },
@@ -71,14 +154,15 @@ const defaultPage: Page = {
       id: "el-hero-default",
       type: "section",
       styles: {
-        backgroundColor: "#f9fafb",
-        padding: "80px 32px",
+        backgroundColor: "#121214",
+        padding: "48px 32px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
+        justifyContent: "center",
+        flex: "1",
         gap: "24px",
         width: "100%",
-        minHeight: "500px",
       },
       children: [
         {
@@ -86,8 +170,8 @@ const defaultPage: Page = {
           type: "badge",
           content: "New",
           styles: {
-            backgroundColor: "#eff6ff",
-            color: "#3b82f6",
+            backgroundColor: "rgba(59, 130, 246, 0.15)",
+            color: "#60a5fa",
             fontSize: "12px",
             fontWeight: "600",
             padding: "4px 12px",
@@ -102,7 +186,7 @@ const defaultPage: Page = {
           styles: {
             fontSize: "56px",
             fontWeight: "700",
-            color: "#111827",
+            color: "#f4f4f5",
             textAlign: "center",
             lineHeight: "1.1",
             maxWidth: "700px",
@@ -115,7 +199,7 @@ const defaultPage: Page = {
             "Build beautiful websites visually. Export clean, production-ready React code.",
           styles: {
             fontSize: "18px",
-            color: "#6b7280",
+            color: "#a1a1aa",
             textAlign: "center",
             maxWidth: "520px",
             lineHeight: "1.7",
@@ -127,7 +211,7 @@ const defaultPage: Page = {
           content: "Get Started",
           href: "#",
           styles: {
-            backgroundColor: "#111827",
+            backgroundColor: "#0d99ff",
             color: "#ffffff",
             padding: "14px 32px",
             borderRadius: "8px",
@@ -142,10 +226,10 @@ const defaultPage: Page = {
     {
       id: "el-footer-default",
       type: "footer",
-      content: "© 2025 MySite. All rights reserved.",
+      content: "\u00a9 2025 MySite. All rights reserved.",
       styles: {
-        backgroundColor: "#111827",
-        color: "#9ca3af",
+        backgroundColor: "#09090b",
+        color: "#a1a1aa",
         padding: "24px 32px",
         textAlign: "center",
         fontSize: "14px",
@@ -158,11 +242,6 @@ const defaultPage: Page = {
 function snap(pages: Page[], activePageId: string): HistoryEntry {
   return { pages: JSON.parse(JSON.stringify(pages)), activePageId };
 }
-
-// ─── Undo debounce ────────────────────────────────────────────────────────────
-// Without this, every keystroke in an input pushes a history entry.
-// We batch rapid style/content changes into a single snapshot by only
-// committing the history entry after 400ms of inactivity.
 
 let _historyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let _pendingSnap: HistoryEntry | null = null;
@@ -191,10 +270,16 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   past: [],
   future: [],
   components: loadComponents(),
-  designTokens: { colors: [], typography: [] },
+  designTokens: typeof window !== "undefined" ? loadTokens() : DEFAULT_TOKENS,
   selectedElementIds: [],
   rightPanelCollapsed: true,
   leftSidebarCollapsed: false,
+
+  canvasBreakpoint: "desktop" as CanvasBreakpoint,
+  canvasBackground: "dark" as CanvasBackground,
+  showGrid: true,
+  showPadding: false,
+  showMargin: false,
 
   undo: () => {
     if (_historyDebounceTimer) {
@@ -252,7 +337,18 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   },
 
   clearSelection: () => set({ selectedElementIds: [] }),
-
+  clearCanvas: () => {
+    const { pages, activePageId, past } = get();
+    set({
+      pages: pages.map((p) =>
+        p.id === activePageId ? { ...p, elements: [] } : p
+      ),
+      selectedElementId: null,
+      selectedElementIds: [],
+      past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
+      future: [],
+    });
+  },
   canUndo: () => get().past.length > 0 || _pendingSnap !== null,
   canRedo: () => get().future.length > 0,
 
@@ -315,83 +411,73 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     });
   },
 
+  setDesignTokens: (tokens) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("layoutica-design-tokens", JSON.stringify(tokens));
+    }
+    set({ designTokens: tokens });
+  },
+
   reorderElement: (sourceId, targetParentId, targetIndex) => {
     const { pages, activePageId, past } = get();
     const activePage = pages.find((p) => p.id === activePageId);
     if (!activePage) return;
 
-    // Find the source element's current parent so we can adjust the insert
-    // index when source and target share the same parent. Removing the source
-    // first shifts all subsequent siblings down by 1, so if the source was
-    // before the target in the same list we need to subtract 1 from targetIndex.
-    let movedElement: CanvasElement | null = null;
-    let sourceParentId: string | undefined = undefined;
-    let sourceIndex = -1;
-
-    const findSource = (
-      elements: CanvasElement[],
-      parentId: string | undefined,
-    ) => {
-      elements.forEach((el, idx) => {
-        if (el.id === sourceId) {
-          movedElement = el;
-          sourceParentId = parentId;
-          sourceIndex = idx;
+    // 1. Ancestry Check: Prevent moving a container into one of its own children
+    const isAncestor = (parentId: string, targetId: string): boolean => {
+      const getElement = (id: string, elements: CanvasElement[]): CanvasElement | null => {
+        for (const el of elements) {
+          if (el.id === id) return el;
+          if (el.children) {
+            const found = getElement(id, el.children);
+            if (found) return found;
+          }
         }
-        if (el.children) findSource(el.children, el.id);
-      });
+        return null;
+      };
+      const parent = getElement(parentId, activePage.elements);
+      if (!parent || !parent.children) return false;
+      const findIn = (elements: CanvasElement[]): boolean => {
+        return elements.some((el) => el.id === targetId || (el.children && findIn(el.children)));
+      };
+      return findIn(parent.children);
     };
-    findSource(activePage.elements, undefined);
-    if (!movedElement) return;
 
-    const removeFromTree = (elements: CanvasElement[]): CanvasElement[] =>
-      elements.reduce((acc, el) => {
-        if (el.id === sourceId) return acc;
-        const cleanedEl = { ...el };
-        if (el.children) cleanedEl.children = removeFromTree(el.children);
-        return [...acc, cleanedEl];
-      }, [] as CanvasElement[]);
-
-    const cleanTree = removeFromTree(activePage.elements);
-
-    // If source and target share the same parent and source was before the
-    // target position, removal shifts the target index down by 1.
-    const sameParent = sourceParentId === targetParentId;
-    let adjustedIndex = targetIndex;
-    if (
-      sameParent &&
-      adjustedIndex !== undefined &&
-      sourceIndex < adjustedIndex
-    ) {
-      adjustedIndex = adjustedIndex - 1;
+    if (targetParentId === sourceId || (targetParentId && isAncestor(sourceId, targetParentId))) {
+      return;
     }
 
+    // 2. Remove from source
+    let movedElement: CanvasElement | null = null;
+    const removeFromTree = (elements: CanvasElement[]): CanvasElement[] => {
+      return elements.reduce((acc, el) => {
+        if (el.id === sourceId) {
+          movedElement = el;
+          return acc;
+        }
+        const newEl = { ...el };
+        if (el.children) newEl.children = removeFromTree(el.children);
+        return [...acc, newEl];
+      }, [] as CanvasElement[]);
+    };
+
+    const treeWithoutSource = removeFromTree(activePage.elements);
+    if (!movedElement) return;
+
+    // 3. Insert into target
     const insertIntoTree = (elements: CanvasElement[]): CanvasElement[] => {
       if (!targetParentId) {
-        const newElements = [...elements];
-        const idx =
-          adjustedIndex !== undefined ? adjustedIndex : newElements.length;
-        newElements.splice(
-          Math.max(0, Math.min(idx, newElements.length)),
-          0,
-          movedElement!,
-        );
-        return newElements;
+        const newArr = [...elements];
+        newArr.splice(targetIndex ?? newArr.length, 0, movedElement!);
+        return newArr;
       }
       return elements.map((el) => {
         if (el.id === targetParentId) {
-          const newChildren = [...(el.children || [])];
-          const idx =
-            adjustedIndex !== undefined ? adjustedIndex : newChildren.length;
-          newChildren.splice(
-            Math.max(0, Math.min(idx, newChildren.length)),
-            0,
-            movedElement!,
-          );
-          return { ...el, children: newChildren };
+          const children = [...(el.children || [])];
+          children.splice(targetIndex ?? children.length, 0, movedElement!);
+          return { ...el, children };
         }
-        if (el.children)
-          return { ...el, children: insertIntoTree(el.children) };
+        if (el.children) return { ...el, children: insertIntoTree(el.children) };
         return el;
       });
     };
@@ -399,7 +485,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     set({
       pages: pages.map((p) =>
         p.id === activePageId
-          ? { ...p, elements: insertIntoTree(cleanTree) }
+          ? { ...p, elements: insertIntoTree(treeWithoutSource) }
           : p,
       ),
       past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
@@ -434,17 +520,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     });
   },
 
-  // ─── updateElement ──────────────────────────────────────────────────────────
-  // FIX 1: Added `focus` state branch so focusStyles writes to el.focusStyles
-  //         instead of silently falling through to el.styles.
-  // FIX 5: Style/content changes use a debounced history commit so rapid
-  //         keystrokes (e.g. typing a font size) produce a single undo step.
-
   updateElement: (id, updates, state = "default") => {
     const { pages, activePageId, past } = get();
 
-    // When setting position:absolute on an element, ensure its parent has
-    // position:relative so top/left are relative to the parent, not the page.
     const becomingAbsolute =
       state === "default" &&
       updates.styles &&
@@ -467,7 +545,6 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
 
     const activePage = pages.find((p) => p.id === activePageId);
 
-    // Build the updated tree with the child's position change first
     const updateInTree = (elements: CanvasElement[]): CanvasElement[] =>
       elements.map((el) => {
         if (el.id === id) {
@@ -497,7 +574,6 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
 
     let updatedElements = activePage ? updateInTree(activePage.elements) : [];
 
-    // Now auto-fix the parent's position if the child became absolute
     if (becomingAbsolute && activePage) {
       const parentId = findParentId(activePage.elements, id);
       if (parentId) {
@@ -705,9 +781,15 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         }
       }
     };
-     return findInTree(page.elements);
-   },
+    return findInTree(page.elements);
+  },
 
-   setRightPanelCollapsed: (v: boolean) => set({ rightPanelCollapsed: v }),
-   setLeftSidebarCollapsed: (v: boolean) => set({ leftSidebarCollapsed: v }),
- }));
+  setRightPanelCollapsed: (v: boolean) => set({ rightPanelCollapsed: v }),
+  setLeftSidebarCollapsed: (v: boolean) => set({ leftSidebarCollapsed: v }),
+
+  setCanvasBreakpoint: (v: CanvasBreakpoint) => set({ canvasBreakpoint: v }),
+  setCanvasBackground: (v: CanvasBackground) => set({ canvasBackground: v }),
+  setShowGrid: (v: boolean) => set({ showGrid: v }),
+  setShowPadding: (v: boolean) => set({ showPadding: v }),
+  setShowMargin: (v: boolean) => set({ showMargin: v }),
+}));
