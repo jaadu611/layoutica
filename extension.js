@@ -10,6 +10,16 @@ export function activate(context) {
   const openCommand = vscode.commands.registerCommand(
     "layoutica.open",
     () => {
+      if (
+        !vscode.workspace.workspaceFolders ||
+        vscode.workspace.workspaceFolders.length === 0
+      ) {
+        vscode.window.showWarningMessage(
+          "Layoutica Builder requires an open workspace folder. Please open a folder and try again."
+        );
+        return;
+      }
+
       const panel = vscode.window.createWebviewPanel(
         "layouticaBuilder",
         "Layoutica Builder",
