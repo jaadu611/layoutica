@@ -253,6 +253,8 @@ export interface BuilderState {
   showGrid: boolean;
   showPadding: boolean;
   showMargin: boolean;
+  exportMode: "live" | "export" | null;
+  setExportMode: (mode: "live" | "export" | null) => void;
 
   addPage: (name: string) => void;
   deletePage: (id: string) => void;

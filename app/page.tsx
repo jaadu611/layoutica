@@ -6,11 +6,15 @@ import Sidebar from "@/components/builder/Sidebar";
 import Canvas from "@/components/builder/Canvas";
 import PropertiesPanel from "@/components/builder/PropertiesPanel";
 import { useBuilderStore } from "@/lib/builder/store";
+import { getVsCodeApi } from "@/lib/builder/vscode";
+import { generateAllPages } from "@/lib/builder/codeGenerator";
 import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   ChevronDown,
+  Sparkles,
+  Terminal,
 } from "lucide-react";
 
 export default function BuilderPage() {
@@ -19,18 +23,93 @@ export default function BuilderPage() {
     setRightPanelCollapsed,
     leftSidebarCollapsed,
     setLeftSidebarCollapsed,
+    pages,
+    components,
+    exportMode,
+    setExportMode,
   } = useBuilderStore();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
+    // If not in VS Code, auto-default to export mode
+    if (typeof window !== "undefined" && !window.acquireVsCodeApi) {
+      setExportMode("export");
+    }
   }, []);
+
+  // Sync workspace files live if exportMode === 'live'
+  useEffect(() => {
+    if (exportMode === "live") {
+      const vscode = getVsCodeApi();
+      if (vscode) {
+        const files = generateAllPages(pages, components);
+        vscode.postMessage({
+          type: "writeWorkspaceFiles",
+          payload: { files },
+        });
+      }
+    }
+  }, [pages, components, exportMode]);
 
   // Use a ref for the sidebar to avoid unnecessary re-renders, but we'll use state-driven styles for the animation
   // Actually, we'll just use the store values directly in the render logic with CSS transitions.
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-app-bg">
+      {mounted && exportMode === null && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md select-none">
+          <div className="bg-[#18181b] border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.9)] rounded-2xl p-8 max-w-[500px] w-full mx-4 flex flex-col gap-6 text-center">
+            <div className="flex flex-col gap-2">
+              <span className="text-xl font-bold text-white tracking-tight">
+                Choose Builder Mode
+              </span>
+              <span className="text-xs text-white/50 leading-relaxed px-4">
+                How would you like to manage the generated code for your website design?
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-3 mt-2">
+              {/* Option 1: Live Mode */}
+              <button
+                onClick={() => setExportMode("live")}
+                className="flex items-start gap-4 p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-accent-blue/40 text-left transition-all duration-200 cursor-pointer group"
+              >
+                <div className="p-2 rounded-lg bg-accent-blue/10 text-accent-blue mt-0.5 group-hover:scale-105 transition-transform duration-200">
+                  <Sparkles size={18} />
+                </div>
+                <div className="flex-1 flex flex-col gap-1">
+                  <span className="text-sm font-semibold text-white group-hover:text-accent-blue transition-colors">
+                    Live Workspace Sync (Recommended)
+                  </span>
+                  <span className="text-[11px] text-white/40 leading-normal">
+                    Files are updated directly in your workspace folder in real-time as you edit. No manual exporting needed.
+                  </span>
+                </div>
+              </button>
+
+              {/* Option 2: Export at the end */}
+              <button
+                onClick={() => setExportMode("export")}
+                className="flex items-start gap-4 p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/20 text-left transition-all duration-200 cursor-pointer group"
+              >
+                <div className="p-2 rounded-lg bg-white/5 text-white/60 mt-0.5 group-hover:scale-105 transition-transform duration-200">
+                  <Terminal size={18} />
+                </div>
+                <div className="flex-1 flex flex-col gap-1">
+                  <span className="text-sm font-semibold text-white">
+                    Manual Export at the End
+                  </span>
+                  <span className="text-[11px] text-white/40 leading-normal">
+                    Design first, and manually download your fully structured codebase as a ZIP archive when finished.
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toolbar />
       <div className="flex flex-1 overflow-hidden relative bg-app-bg">
         <Canvas />

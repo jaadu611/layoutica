@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { getVsCodeApi } from "@/lib/builder/vscode";
+import { useBuilderStore } from "@/lib/builder/store";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   Download,
@@ -395,7 +396,10 @@ function Breadcrumb({ path }: { path: string }) {
 }
 
 export default function CodeExportModal({ files, onClose }: Props) {
-  const [tab, setTab] = useState<"download" | "browse">("download");
+  const exportMode = useBuilderStore((s) => s.exportMode);
+  const [tab, setTab] = useState<"download" | "browse">(
+    exportMode === "live" ? "browse" : "download"
+  );
   const [activeFile, setActiveFile] = useState(Object.keys(files)[0] ?? "");
   const [copied, setCopied] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -460,8 +464,8 @@ export default function CodeExportModal({ files, onClose }: Props) {
   return (
     <>
       <style>{`
-        @keyframes cem-in { from { opacity:0; transform:translateY(8px) scale(0.985) } to { opacity:1; transform:none } }
-        .cem-overlay { animation: cem-in 0.2s cubic-bezier(0.16,1,0.3,1) }
+        ${exportMode === "live" ? "" : "@keyframes cem-in { from { opacity:0; transform:translateY(8px) scale(0.985) } to { opacity:1; transform:none } }"}
+        .cem-overlay { ${exportMode === "live" ? "" : "animation: cem-in 0.2s cubic-bezier(0.16,1,0.3,1)"} }
         .cem-tree-dir:hover { background: rgba(255,255,255,0.05) !important }
         .cem-tree-file:hover { background: rgba(96,165,250,0.07) !important }
         .cem-file-row:hover { background: rgba(255,255,255,0.05) !important; border-color: rgba(255,255,255,0.1) !important }
@@ -514,24 +518,24 @@ export default function CodeExportModal({ files, onClose }: Props) {
                     height: 26,
                     borderRadius: 7,
                     flexShrink: 0,
-                    background: "rgba(96,165,250,0.12)",
-                    border: "1px solid rgba(96,165,250,0.25)",
+                    background: exportMode === "live" ? "rgba(34,197,94,0.12)" : "rgba(96,165,250,0.12)",
+                    border: exportMode === "live" ? "1px solid rgba(34,197,94,0.25)" : "1px solid rgba(96,165,250,0.25)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Package size={12} style={{ color: "#60a5fa" }} />
+                  <Package size={12} style={{ color: exportMode === "live" ? "#22c55e" : "#60a5fa" }} />
                 </div>
                 <span
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "rgba(255,255,255,0.8)",
+                    color: exportMode === "live" ? "#22c55e" : "rgba(255,255,255,0.8)",
                     letterSpacing: "-0.01em",
                   }}
                 >
-                  Export
+                  {exportMode === "live" ? "Live Sync" : "Export"}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -570,10 +574,12 @@ export default function CodeExportModal({ files, onClose }: Props) {
             </div>
 
             <div style={{ padding: "8px 8px 4px" }}>
-              {(["download", "browse"] as const).map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setTab(id)}
+              {(["download", "browse"] as const)
+                .filter((id) => exportMode !== "live" || id !== "download")
+                .map((id) => (
+                  <button
+                    key={id}
+                    onClick={() => setTab(id)}
                   className={`cem-tab ${tab === id ? "cem-tab-active" : ""} w-full flex items-center gap-2 cursor-pointer transition-all rounded-lg`}
                   style={{
                     padding: "7px 10px",

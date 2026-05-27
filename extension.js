@@ -62,6 +62,30 @@ export function activate(context) {
       panel.webview.onDidReceiveMessage(
         (message) => {
           switch (message.type) {
+            case "writeWorkspaceFiles": {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+              if (!workspaceFolder) return;
+              const files = message.payload.files;
+              try {
+                for (const [relativePath, content] of Object.entries(files)) {
+                  const fileUri = vscode.Uri.joinPath(
+                    workspaceFolder.uri,
+                    relativePath
+                  );
+                  const dirPath = path.dirname(fileUri.fsPath);
+                  if (!fs.existsSync(dirPath)) {
+                    fs.mkdirSync(dirPath, { recursive: true });
+                  }
+                  fs.writeFileSync(fileUri.fsPath, content, "utf8");
+                }
+              } catch (err) {
+                vscode.window.showErrorMessage(
+                  `Failed to sync files: ${err.message || String(err)}`
+                );
+              }
+              break;
+            }
+
             case "saveProject": {
               const options = {
                 defaultUri: vscode.workspace.workspaceFolders?.[0]

@@ -2525,10 +2525,6 @@ export default function Canvas() {
           transition: animateTransform ? "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
         }}
       >
-        {/* Render spacing overlays inside the scaled container */}
-        {showPadding && <SpacingOverlay mode="padding" />}
-        {showMargin && <SpacingOverlay mode="margin" />}
-
         <div
           style={{
             display: "flex",
@@ -2701,6 +2697,8 @@ export default function Canvas() {
                       />
                     ))
                   )}
+                  {pg.id === activePageId && showPadding && <SpacingOverlay mode="padding" />}
+                  {pg.id === activePageId && showMargin && <SpacingOverlay mode="margin" />}
                 </div>
               </div>
             );

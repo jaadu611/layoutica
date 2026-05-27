@@ -263,6 +263,8 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   showGrid: true,
   showPadding: false,
   showMargin: false,
+  exportMode: null,
+  setExportMode: (mode) => set({ exportMode: mode }),
 
   undo: () => {
     if (_historyDebounceTimer) {
