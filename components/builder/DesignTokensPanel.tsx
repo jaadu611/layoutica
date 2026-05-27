@@ -5,9 +5,7 @@ import { Plus, Trash2, Pipette } from "lucide-react";
 import { useBuilderStore } from "@/lib/builder/store";
 import { StyleProps } from "@/lib/builder/types";
 
-// ─── Token storage (localStorage) ────────────────────────────────────────────
 
-const TOKENS_KEY = "layoutica-design-tokens";
 
 export interface ColorToken {
   id: string;

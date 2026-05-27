@@ -82,35 +82,18 @@ const DEFAULT_TOKENS: DesignTokens = {
 };
 
 function loadTokens(): DesignTokens {
-  if (typeof window === "undefined") return DEFAULT_TOKENS;
-  try {
-    const raw = localStorage.getItem("layoutica-design-tokens");
-    return raw ? JSON.parse(raw) : DEFAULT_TOKENS;
-  } catch {
-    return DEFAULT_TOKENS;
-  }
+  return DEFAULT_TOKENS;
 }
 
 const MAX_HISTORY = 50;
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-const COMPONENTS_KEY = "buildify-components";
-
 function loadComponents(): SavedComponent[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(COMPONENTS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveComponents(components: SavedComponent[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(COMPONENTS_KEY, JSON.stringify(components));
-  } catch {}
+  // Saved in-memory via zustand store state only
 }
 
 function deepCloneWithNewIds(el: CanvasElement): CanvasElement {
@@ -412,9 +395,6 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   },
 
   setDesignTokens: (tokens) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("layoutica-design-tokens", JSON.stringify(tokens));
-    }
     set({ designTokens: tokens });
   },
 

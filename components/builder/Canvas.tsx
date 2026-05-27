@@ -1781,19 +1781,12 @@ function SpacingOverlay({ mode }: { mode: "padding" | "margin" }) {
 
 // ─── Clipboard ────────────────────────────────────────────────────────────────
 
-const CLIPBOARD_KEY = "builder-clipboard";
+let memoryClipboard: CanvasElement[] = [];
 function readClipboard(): CanvasElement[] {
-  try {
-    const raw = sessionStorage.getItem(CLIPBOARD_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return memoryClipboard;
 }
 function writeClipboard(els: CanvasElement[]) {
-  try {
-    sessionStorage.setItem(CLIPBOARD_KEY, JSON.stringify(els));
-  } catch {}
+  memoryClipboard = els;
 }
 function generateId() {
   return Math.random().toString(36).substr(2, 9);
