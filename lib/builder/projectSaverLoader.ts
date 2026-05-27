@@ -1,4 +1,5 @@
 import { Page, SavedComponent } from "./types";
+import { getVsCodeApi } from "./vscode";
 
 export interface DesignTokens {
   colors: Array<{ id: string; name: string; value: string }>;
@@ -86,13 +87,27 @@ export const ProjectSaverLoader = {
       };
 
       const jsonString = JSON.stringify(project, null, 2);
+      const safeName = (name || "project")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/gi, "-");
+
+      const vscode = getVsCodeApi();
+      if (vscode) {
+        vscode.postMessage({
+          type: "saveProject",
+          payload: {
+            name,
+            json: jsonString,
+            filename: `${safeName}.ltica`,
+          },
+        });
+        return;
+      }
+
       const blob = new Blob([jsonString], { type: "application/json" });
       const url = URL.createObjectURL(blob);
 
       const link = document.createElement("a");
-      const safeName = (name || "project")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/gi, "-");
       link.href = url;
       link.download = `${safeName}.ltica`;
       document.body.appendChild(link);
@@ -107,6 +122,41 @@ export const ProjectSaverLoader = {
   },
 
   load: (): Promise<LticaProject> => {
+    const vscode = getVsCodeApi();
+    if (vscode) {
+      return new Promise((resolve, reject) => {
+        const handleMessage = (event: MessageEvent) => {
+          const message = event.data;
+          if (message.type === "loadProjectResponse") {
+            window.removeEventListener("message", handleMessage);
+            if (message.payload.cancelled) {
+              reject("cancelled");
+            } else if (message.payload.error) {
+              reject(message.payload.error);
+            } else {
+              try {
+                const parsed = JSON.parse(message.payload.json) as LticaProject;
+                if (
+                  !parsed.metadata ||
+                  !parsed.data ||
+                  !Array.isArray(parsed.data.pages)
+                ) {
+                  throw new Error(
+                    "Invalid .ltica file structure — missing required fields.",
+                  );
+                }
+                resolve(migrateProject(parsed));
+              } catch (e: any) {
+                reject(`Failed to parse file: ${e.message}`);
+              }
+            }
+          }
+        };
+        window.addEventListener("message", handleMessage);
+        vscode.postMessage({ type: "loadProject" });
+      });
+    }
+
     return new Promise((resolve, reject) => {
       const input = document.createElement("input");
       input.type = "file";

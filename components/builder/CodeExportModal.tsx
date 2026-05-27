@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { getVsCodeApi } from "@/lib/builder/vscode";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   Download,
@@ -185,6 +186,21 @@ async function downloadZip(allFiles: Record<string, string>, name: string) {
   const zip = new (window as any).JSZip();
   for (const [path, content] of Object.entries(allFiles))
     zip.file(path, content);
+
+  const vscode = getVsCodeApi();
+  if (vscode) {
+    const base64 = await zip.generateAsync({ type: "base64" });
+    const filename = `${name.toLowerCase().replace(/[^a-z0-9]/gi, "-")}.zip`;
+    vscode.postMessage({
+      type: "exportZip",
+      payload: {
+        base64,
+        filename,
+      },
+    });
+    return;
+  }
+
   const blob = await zip.generateAsync({ type: "blob" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
