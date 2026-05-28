@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { getVsCodeApi } from "@/lib/builder/vscode";
-import { useBuilderStore } from "@/lib/builder/store";
+import { getVsCodeApi } from "@/lib/builder/frontend/vscode";
+import { useBuilderStore } from "@/lib/builder/frontend/store";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   Download,

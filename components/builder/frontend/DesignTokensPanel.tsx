@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Plus, Trash2, Pipette } from "lucide-react";
-import { useBuilderStore } from "@/lib/builder/store";
-import { StyleProps } from "@/lib/builder/types";
+import { useBuilderStore } from "@/lib/builder/frontend/store";
+import { StyleProps } from "@/lib/builder/frontend/types";
 
 
 

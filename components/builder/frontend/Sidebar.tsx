@@ -8,12 +8,12 @@ import React, {
   createContext,
   useContext,
 } from "react";
-import { useBuilderStore } from "@/lib/builder/store";
+import { useBuilderStore } from "@/lib/builder/frontend/store";
 import {
   SavedComponent,
   CanvasElement,
   ElementType,
-} from "@/lib/builder/types";
+} from "@/lib/builder/frontend/types";
 import {
   Layout,
   Type,

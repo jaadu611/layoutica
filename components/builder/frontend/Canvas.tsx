@@ -9,9 +9,9 @@ import React, {
 } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { useBuilderStore } from "@/lib/builder/store";
-import { ElementType, CanvasElement } from "@/lib/builder/types";
-import { resolveDeviceDimensions, DEVICE_PRESETS } from "@/lib/builder/devices";
+import { useBuilderStore } from "@/lib/builder/frontend/store";
+import { ElementType, CanvasElement } from "@/lib/builder/frontend/types";
+import { resolveDeviceDimensions, DEVICE_PRESETS } from "@/lib/builder/frontend/devices";
 import { defaultElement } from "./Sidebar";
 import * as LucideIcons from "lucide-react";
 

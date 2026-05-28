@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useBuilderStore } from "@/lib/builder/store";
-import { generateAllPages } from "@/lib/builder/codeGenerator";
-import { ProjectSaverLoader } from "@/lib/builder/projectSaverLoader";
+import { useBuilderStore } from "@/lib/builder/frontend/store";
+import { generateAllPages } from "@/lib/builder/frontend/codeGenerator";
+import { ProjectSaverLoader } from "@/lib/builder/frontend/projectSaverLoader";
 import CodeExportModal from "./CodeExportModal";
 import {
   Undo2,
@@ -26,8 +26,8 @@ import {
   Scan,
 } from "lucide-react";
 import DesignTokensPanel from "./DesignTokensPanel";
-import { CanvasBackground, CanvasBreakpoint } from "@/lib/builder/types";
-import { DEVICE_PRESETS, resolveDeviceDimensions } from "@/lib/builder/devices";
+import { CanvasBackground, CanvasBreakpoint } from "@/lib/builder/frontend/types";
+import { DEVICE_PRESETS, resolveDeviceDimensions } from "@/lib/builder/frontend/devices";
 
 export interface CanvasViewSettings {
   breakpoint: CanvasBreakpoint;

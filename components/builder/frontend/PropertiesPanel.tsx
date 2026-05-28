@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import gsap from "gsap";
-import { useBuilderStore } from "@/lib/builder/store";
-import { StyleProps, CanvasElement } from "@/lib/builder/types";
+import { useBuilderStore } from "@/lib/builder/frontend/store";
+import { StyleProps, CanvasElement } from "@/lib/builder/frontend/types";
 import {
   Link as LinkIcon,
   Unlink,

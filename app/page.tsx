@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Toolbar from "@/components/builder/Toolbar";
-import Sidebar from "@/components/builder/Sidebar";
-import Canvas from "@/components/builder/Canvas";
-import PropertiesPanel from "@/components/builder/PropertiesPanel";
-import { useBuilderStore } from "@/lib/builder/store";
-import { getVsCodeApi } from "@/lib/builder/vscode";
-import { generateAllPages } from "@/lib/builder/codeGenerator";
+import Toolbar from "@/components/builder/frontend/Toolbar";
+import Sidebar from "@/components/builder/frontend/Sidebar";
+import Canvas from "@/components/builder/frontend/Canvas";
+import PropertiesPanel from "@/components/builder/frontend/PropertiesPanel";
+import { useBuilderStore } from "@/lib/builder/frontend/store";
+import { getVsCodeApi } from "@/lib/builder/frontend/vscode";
+import { generateAllPages } from "@/lib/builder/frontend/codeGenerator";
 import {
   ChevronLeft,
   ChevronRight,
