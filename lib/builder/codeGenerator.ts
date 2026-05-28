@@ -1,4 +1,5 @@
 import { CanvasElement, Page, SavedComponent, StyleProps } from "./types";
+import { DesignTokens } from "./projectSaverLoader";
 import { twMerge } from "tailwind-merge";
 import { clsx, type ClassValue } from "clsx";
 
@@ -121,6 +122,12 @@ function stylesToTailwind(
   const inlineStyle: Record<string, string> = {};
   let fontClassName: string | undefined;
 
+  const cleanSplit = (val: string) => {
+    // Replace spaces inside parentheses (like rgb/rgba colors) to prevent incorrect splitting
+    const cleaned = val.trim().replace(/\([^)]+\)/g, (m) => m.replace(/\s+/g, ""));
+    return cleaned.split(/\s+/);
+  };
+
   // Display & Flex
   if (styles.display) {
     const m: Record<string, string> = {
@@ -198,12 +205,12 @@ function stylesToTailwind(
   if (styles.gridRow) inlineStyle.gridRow = styles.gridRow;
 
   // Sizing
-  if (styles.width) cls.push(`w-[${styles.width}]`);
-  if (styles.height) cls.push(`h-[${styles.height}]`);
-  if (styles.minWidth) cls.push(`min-w-[${styles.minWidth}]`);
-  if (styles.maxWidth) cls.push(`max-w-[${styles.maxWidth}]`);
-  if (styles.minHeight) cls.push(`min-h-[${styles.minHeight}]`);
-  if (styles.maxHeight) cls.push(`max-h-[${styles.maxHeight}]`);
+  if (styles.width) cls.push(`w-[${sp(styles.width)}]`);
+  if (styles.height) cls.push(`h-[${sp(styles.height)}]`);
+  if (styles.minWidth) cls.push(`min-w-[${sp(styles.minWidth)}]`);
+  if (styles.maxWidth) cls.push(`max-w-[${sp(styles.maxWidth)}]`);
+  if (styles.minHeight) cls.push(`min-h-[${sp(styles.minHeight)}]`);
+  if (styles.maxHeight) cls.push(`max-h-[${sp(styles.maxHeight)}]`);
   if (styles.aspectRatio) inlineStyle.aspectRatio = styles.aspectRatio;
 
   // Padding — prefer longhand if any side is set individually
@@ -218,9 +225,7 @@ function stylesToTailwind(
     if (styles.paddingBottom) cls.push(`pb-[${sp(styles.paddingBottom)}]`);
     if (styles.paddingLeft) cls.push(`pl-[${sp(styles.paddingLeft)}]`);
   } else if (styles.padding) {
-    const parts = styles.padding.trim().split(/\s+/);
-    if (parts.length === 1) cls.push(`p-[${sp(styles.padding)}]`);
-    else inlineStyle.padding = styles.padding; // multi-value shorthand → inline
+    cls.push(`p-[${sp(styles.padding.trim().replace(/\s+/g, "_"))}]`);
   }
 
   // Margin
@@ -235,9 +240,7 @@ function stylesToTailwind(
     if (styles.marginBottom) cls.push(`mb-[${sp(styles.marginBottom)}]`);
     if (styles.marginLeft) cls.push(`ml-[${sp(styles.marginLeft)}]`);
   } else if (styles.margin) {
-    const parts = styles.margin.trim().split(/\s+/);
-    if (parts.length === 1) cls.push(`m-[${sp(styles.margin)}]`);
-    else inlineStyle.margin = styles.margin;
+    cls.push(`m-[${sp(styles.margin.trim().replace(/\s+/g, "_"))}]`);
   }
 
   // Position
@@ -250,8 +253,8 @@ function stylesToTailwind(
   if (styles.zIndex !== undefined) cls.push(`z-[${styles.zIndex}]`);
 
   // Colors & BG
-  if (styles.backgroundColor) cls.push(`bg-[${styles.backgroundColor}]`);
-  if (styles.color) cls.push(`text-[${styles.color}]`);
+  if (styles.backgroundColor) cls.push(`bg-[${sp(styles.backgroundColor)}]`);
+  if (styles.color) cls.push(`text-[${sp(styles.color)}]`);
   if (styles.opacity !== undefined) cls.push(`opacity-[${styles.opacity}]`);
   if (styles.backgroundImage)
     inlineStyle.backgroundImage = styles.backgroundImage;
@@ -277,7 +280,7 @@ function stylesToTailwind(
     !styles.borderBottom &&
     !styles.borderLeft
   ) {
-    const parts = styles.border.trim().split(/\s+/);
+    const parts = cleanSplit(styles.border);
     const width = parts.find((p) => /^\d/.test(p)) || "";
     const style =
       parts.find((p) =>
@@ -285,12 +288,12 @@ function stylesToTailwind(
       ) || "";
     const color =
       parts.find(
-        (p) => p.startsWith("#") || p.startsWith("rgb") || p.startsWith("hsl"),
+        (p) => p.startsWith("#") || p.startsWith("rgb") || p.startsWith("hsl") || p.startsWith("var("),
       ) || "";
     cls.push("border");
     if (width && width !== "1px") cls.push(`border-[${width}]`);
     if (style && style !== "solid") cls.push(`border-${style}`);
-    if (color) cls.push(`border-[${color}]`);
+    if (color) cls.push(`border-[${sp(color)}]`);
   } else if (
     styles.borderTop ||
     styles.borderRight ||
@@ -298,7 +301,7 @@ function stylesToTailwind(
     styles.borderLeft
   ) {
     const parseSide = (val: string, side: string) => {
-      const parts = val.trim().split(/\s+/);
+      const parts = cleanSplit(val);
       const width = parts.find((p) => /^\d/.test(p)) || "";
       const st =
         parts.find((p) =>
@@ -307,11 +310,11 @@ function stylesToTailwind(
       const color =
         parts.find(
           (p) =>
-            p.startsWith("#") || p.startsWith("rgb") || p.startsWith("hsl"),
+            p.startsWith("#") || p.startsWith("rgb") || p.startsWith("hsl") || p.startsWith("var("),
         ) || "";
       if (width) cls.push(`border-${side}-[${width}]`);
       if (st && st !== "solid") cls.push(`border-${side}-${st}`);
-      if (color) cls.push(`border-${side}-[${color}]`);
+      if (color) cls.push(`border-${side}-[${sp(color)}]`);
     };
     if (styles.borderTop) parseSide(styles.borderTop, "t");
     if (styles.borderRight) parseSide(styles.borderRight, "r");
@@ -322,14 +325,14 @@ function stylesToTailwind(
     if (styles.borderWidth) cls.push(`border-[${styles.borderWidth}]`);
     if (styles.borderStyle && styles.borderStyle !== "solid")
       cls.push(`border-${styles.borderStyle}`);
-    if (styles.borderColor) cls.push(`border-[${styles.borderColor}]`);
+    if (styles.borderColor) cls.push(`border-[${sp(styles.borderColor)}]`);
   }
   if (styles.borderRadius) {
-    const parts = styles.borderRadius.trim().split(/\s+/);
-    if (parts.length === 1) cls.push(`rounded-[${styles.borderRadius}]`);
-    else inlineStyle.borderRadius = styles.borderRadius;
+    cls.push(`rounded-[${styles.borderRadius.trim().replace(/\s+/g, "_")}]`);
   }
-  if (styles.outline) inlineStyle.outline = styles.outline;
+  if (styles.outline) {
+    cls.push(`outline-[${styles.outline.trim().replace(/\s+/g, "_")}]`);
+  }
 
   // Typography
   if (styles.fontSize) cls.push(`text-[${styles.fontSize}]`);
@@ -456,94 +459,6 @@ function stylesToTailwind(
 
 // ─── State CSS (hover / active / focus) ──────────────────────────────────────
 
-const CSS_PROP_SKIP = new Set([
-  "gradientType",
-  "gradientAngle",
-  "gradientStartColor",
-  "gradientEndColor",
-  "lineClamp",
-  "tableStripe",
-  "tableHeaderBackground",
-  "tableCellPadding",
-]);
-
-function styleObjToCSS(styles: Partial<StyleProps>): string {
-  const lines: string[] = [];
-  for (const [key, val] of Object.entries(styles)) {
-    if (val === undefined || val === "" || CSS_PROP_SKIP.has(key)) continue;
-    const cssKey = key.replace(/([A-Z])/g, (m) => `-${m.toLowerCase()}`);
-    lines.push(`  ${cssKey}: ${val};`);
-  }
-  const s = styles as any;
-  if (s.gradientType === "linear" && s.gradientStartColor && s.gradientEndColor)
-    lines.push(
-      `  background-image: linear-gradient(${s.gradientAngle ?? 135}deg, ${s.gradientStartColor}, ${s.gradientEndColor});`,
-    );
-  if (s.lineClamp)
-    lines.push(
-      `  display: -webkit-box;`,
-      `  -webkit-line-clamp: ${s.lineClamp};`,
-      `  -webkit-box-orient: vertical;`,
-      `  overflow: hidden;`,
-    );
-  return lines.join("\n");
-}
-
-interface StateCSS {
-  selector: string;
-  css: string;
-}
-
-function buildBaseRule(el: CanvasElement, stateClass: string): StateCSS | null {
-  const lines: string[] = [];
-  if (el.styles.transition)
-    lines.push(`  transition: ${el.styles.transition};`);
-  if (!lines.length) return null;
-  return { selector: `.${stateClass}`, css: lines.join("\n") };
-}
-
-function collectStateCSS(elements: CanvasElement[], rules: StateCSS[]) {
-  for (const el of elements) {
-    const stateClass = `el-${el.id}`;
-    const hasHover = !!(
-      el.hoverStyles && Object.keys(el.hoverStyles).length > 0
-    );
-    const hasActive = !!(
-      el.activeStyles && Object.keys(el.activeStyles).length > 0
-    );
-    const hasFocus = !!(
-      el.focusStyles && Object.keys(el.focusStyles).length > 0
-    );
-
-    if (hasHover || hasActive || hasFocus) {
-      const base = buildBaseRule(el, stateClass);
-      if (base) rules.push(base);
-      if (hasHover) {
-        const css = styleObjToCSS(el.hoverStyles!);
-        if (css) rules.push({ selector: `.${stateClass}:hover`, css });
-      }
-      if (hasActive) {
-        const css = styleObjToCSS(el.activeStyles!);
-        if (css) rules.push({ selector: `.${stateClass}:active`, css });
-      }
-      if (hasFocus) {
-        const css = styleObjToCSS(el.focusStyles!);
-        if (css) rules.push({ selector: `.${stateClass}:focus`, css });
-      }
-    }
-    if (el.children) collectStateCSS(el.children, rules);
-  }
-}
-
-function buildStateCSSFile(pages: Page[]): string {
-  const rules: StateCSS[] = [];
-  for (const page of pages) collectStateCSS(page.elements, rules);
-  if (!rules.length) return "";
-  return rules
-    .map(({ selector, css }) => `${selector} {\n${css}\n}`)
-    .join("\n\n");
-}
-
 // ─── JSX helpers ─────────────────────────────────────────────────────────────
 
 function serializeStyle(style: Record<string, string>): string {
@@ -552,6 +467,47 @@ function serializeStyle(style: Record<string, string>): string {
     .map(([k, v]) => `${k}: "${v}"`)
     .join(", ");
   return entries ? `{ ${entries} }` : "";
+}
+
+function getResponsiveVisibilityClasses(
+  showDesktop: boolean,
+  showTablet: boolean,
+  showMobile: boolean,
+  displayVal: string = "block"
+): string[] {
+  const cls: string[] = [];
+  
+  if (showDesktop && showTablet && showMobile) {
+    return cls;
+  }
+  if (!showDesktop && !showTablet && !showMobile) {
+    cls.push("hidden");
+    return cls;
+  }
+  
+  const displayClass = displayVal === "none" ? "block" : displayVal;
+  
+  if (!showMobile) {
+    cls.push("hidden");
+    if (showTablet) {
+      cls.push(`md:${displayClass}`);
+      if (!showDesktop) {
+        cls.push("lg:hidden");
+      }
+    } else if (showDesktop) {
+      cls.push(`lg:${displayClass}`);
+    }
+  } else {
+    if (!showTablet && !showDesktop) {
+      cls.push("md:hidden");
+    } else if (!showTablet && showDesktop) {
+      cls.push("md:hidden", `lg:${displayClass}`);
+    } else if (showTablet && !showDesktop) {
+      cls.push("lg:hidden");
+    }
+  }
+  
+  return cls;
 }
 
 function toPascalCase(str: string): string {
@@ -585,7 +541,6 @@ function elementToJSX(
   usedFonts: Map<string, FontEntry>,
   indent: number,
   compMap: Map<string, string>,
-  stateRules: StateCSS[],
 ): string {
   const pad = " ".repeat(indent);
 
@@ -598,36 +553,37 @@ function elementToJSX(
     usedFonts,
   );
 
-  const hasStateStyles =
-    !!(el.hoverStyles && Object.keys(el.hoverStyles).length > 0) ||
-    !!(el.activeStyles && Object.keys(el.activeStyles).length > 0) ||
-    !!(el.focusStyles && Object.keys(el.focusStyles).length > 0);
+  const clsParts = className ? className.split(/\s+/).filter(Boolean) : [];
 
-  const stateClass = hasStateStyles ? `el-${el.id}` : "";
+  const displayVal = el.styles.display || "block";
+  const showDesktop = el.responsiveVisibility?.desktop ?? true;
+  const showTablet = el.responsiveVisibility?.tablet ?? true;
+  const showMobile = el.responsiveVisibility?.mobile ?? true;
+  const respClasses = getResponsiveVisibilityClasses(showDesktop, showTablet, showMobile, displayVal);
+  clsParts.push(...respClasses);
 
-  if (hasStateStyles) {
-    const base = buildBaseRule(el, stateClass);
-    if (base) stateRules.push(base);
-    if (el.hoverStyles && Object.keys(el.hoverStyles).length > 0) {
-      const css = styleObjToCSS(el.hoverStyles);
-      if (css) stateRules.push({ selector: `.${stateClass}:hover`, css });
-    }
-    if (el.activeStyles && Object.keys(el.activeStyles).length > 0) {
-      const css = styleObjToCSS(el.activeStyles);
-      if (css) stateRules.push({ selector: `.${stateClass}:active`, css });
-    }
-    if (el.focusStyles && Object.keys(el.focusStyles).length > 0) {
-      const css = styleObjToCSS(el.focusStyles);
-      if (css) stateRules.push({ selector: `.${stateClass}:focus`, css });
+  if (el.hoverStyles && Object.keys(el.hoverStyles).length > 0) {
+    const { className: hc } = stylesToTailwind(el.hoverStyles, usedFonts);
+    if (hc) {
+      clsParts.push(...hc.split(/\s+/).filter(Boolean).map((c) => `hover:${c}`));
     }
   }
 
-  const allClasses = [className, stateClass].filter(Boolean).join(" ");
+  if (el.activeStyles && Object.keys(el.activeStyles).length > 0) {
+    const { className: ac } = stylesToTailwind(el.activeStyles, usedFonts);
+    if (ac) {
+      clsParts.push(...ac.split(/\s+/).filter(Boolean).map((c) => `active:${c}`));
+    }
+  }
 
-  // Strip transition from inline style — it's emitted in the stylesheet via buildBaseRule.
-  // This is the fix: inline style transition + stylesheet :hover = no animation.
-  // Stylesheet transition + stylesheet :hover = animation works correctly.
-  const { transition: _t, ...styleWithoutTransition } = style as any;
+  if (el.focusStyles && Object.keys(el.focusStyles).length > 0) {
+    const { className: fc } = stylesToTailwind(el.focusStyles, usedFonts);
+    if (fc) {
+      clsParts.push(...fc.split(/\s+/).filter(Boolean).map((c) => `focus:${c}`));
+    }
+  }
+
+  const allClasses = clsParts.join(" ");
 
   let clsAttr = "";
   if (fontClassName && allClasses)
@@ -635,11 +591,12 @@ function elementToJSX(
   else if (fontClassName) clsAttr = ` className={\`${fontClassName}\`}`;
   else if (allClasses) clsAttr = ` className="${allClasses}"`;
 
+  const { transition: _t, ...styleWithoutTransition } = style as any;
   const styleStr = serializeStyle(styleWithoutTransition);
   const styAttr = styleStr ? ` style={${styleStr}}` : "";
 
   const kids = (el.children || [])
-    .map((c) => elementToJSX(c, usedFonts, indent + 2, compMap, stateRules))
+    .map((c) => elementToJSX(c, usedFonts, indent + 2, compMap))
     .join("\n");
 
   const tagMap: Record<string, string> = {
@@ -929,12 +886,8 @@ function generateComponentFile(name: string, element: CanvasElement): string {
   const usedFonts = extractFonts([element]);
   const fontImports = generateFontImports(usedFonts);
   const fontInits = generateFontInits(usedFonts);
-  const stateRules: StateCSS[] = [];
-  const jsx = elementToJSX(element, usedFonts, 4, new Map(), stateRules);
+  const jsx = elementToJSX(element, usedFonts, 4, new Map());
   const needsSyntax = hasPre([element]);
-  const styleBlock = stateRules.length
-    ? `\n      <style>{\`\n${stateRules.map(({ selector, css }) => `${selector} {\n${css}\n}`).join("\n\n")}\n      \`}</style>`
-    : "";
   return [
     `import React from 'react';`,
     needsSyntax ? SYNTAX_HIGHLIGHTER_IMPORT : "",
@@ -944,7 +897,6 @@ function generateComponentFile(name: string, element: CanvasElement): string {
     `export default function ${name}() {`,
     `  return (`,
     `    <>`,
-    styleBlock,
     jsx,
     `    </>`,
     `  );`,
@@ -962,7 +914,6 @@ export function generatePageCode(
   const usedFonts = extractFonts(page.elements);
   const fontImports = generateFontImports(usedFonts);
   const fontInits = generateFontInits(usedFonts);
-  const stateRules: StateCSS[] = [];
   const needsSyntax = hasPre(page.elements);
 
   const usedComps = new Set<string>();
@@ -977,12 +928,17 @@ export function generatePageCode(
     .sort()
     .map((n) => `import ${n} from "@/components/${n}";`);
   const bodyJSX = page.elements
-    .map((el) => elementToJSX(el, usedFonts, 6, compNameMap, stateRules))
+    .map((el) => {
+      const clonedEl = {
+        ...el,
+        styles: {
+          ...el.styles,
+          flexShrink: el.styles.flexShrink !== undefined ? el.styles.flexShrink : 0,
+        },
+      };
+      return elementToJSX(clonedEl, usedFonts, 6, compNameMap);
+    })
     .join("\n\n");
-
-  const stateStyleBlock = stateRules.length
-    ? `\n      {/* Interaction styles: hover, active, focus with transitions */}\n      <style>{\`\n${stateRules.map(({ selector, css }) => `${selector} {\n${css}\n}`).join("\n\n")}\n      \`}</style>`
-    : "";
 
   return [
     `import React from 'react';`,
@@ -994,7 +950,6 @@ export function generatePageCode(
     `export default function ${pageName}Page() {`,
     `  return (`,
     `    <main className="flex flex-col w-full min-h-screen overflow-x-hidden">`,
-    stateStyleBlock,
     bodyJSX,
     `    </main>`,
     `  );`,
@@ -1007,6 +962,7 @@ export function generatePageCode(
 export function generateAllPages(
   pages: Page[],
   savedComponents: SavedComponent[] = [],
+  designTokens?: DesignTokens,
 ): Record<string, string> {
   const files: Record<string, string> = {};
   const compNameMap = buildCompNameMap(savedComponents);
@@ -1024,16 +980,6 @@ export function generateAllPages(
     const filePath =
       page.slug === "/" ? "src/app/page.tsx" : `src/app${page.slug}/page.tsx`;
     files[filePath] = generatePageCode(page, compNameMap);
-  }
-
-  const allStateCss = buildStateCSSFile(pages);
-  if (allStateCss) {
-    files["src/app/interactions.css"] = [
-      "/* Auto-generated: hover, active, focus, transition rules */",
-      "/* Interaction styles are also inlined in each page component. */",
-      "",
-      allStateCss,
-    ].join("\n");
   }
 
   const allElements = pages.flatMap((p) => p.elements);
@@ -1057,8 +1003,27 @@ export function generateAllPages(
     `}`,
   ].join("\n");
 
-  files["src/app/globals.css"] =
-    `@tailwind base;\n@tailwind components;\n@tailwind utilities;`;
+  let tokensCss = "";
+  if (designTokens && designTokens.colors && designTokens.colors.length > 0) {
+    const lines = designTokens.colors.map(
+      (c: any) => `  --color-${c.name.toLowerCase().replace(/[^a-z0-9]/gi, "-")}: ${c.value};`
+    ).join("\n");
+    tokensCss = `:root {\n${lines}\n}\n\n`;
+  }
+
+  files["src/app/globals.css"] = [
+    `@import "tailwindcss";`,
+    `@tailwind base;`,
+    `@tailwind components;`,
+    `@tailwind utilities;`,
+    ``,
+    tokensCss,
+    `html, body {`,
+    `  margin: 0;`,
+    `  padding: 0;`,
+    `  box-sizing: border-box;`,
+    `}`,
+  ].join("\n");
 
   return files;
 }

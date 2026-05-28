@@ -25,17 +25,37 @@ export default function BuilderPage() {
     setLeftSidebarCollapsed,
     pages,
     components,
+    designTokens,
     exportMode,
     setExportMode,
   } = useBuilderStore();
 
   const [mounted, setMounted] = useState(false);
+  const [initStatus, setInitStatus] = useState<"idle" | "initializing" | "success" | "error">("idle");
+  const [initError, setInitError] = useState<string | null>(null);
+
   useEffect(() => {
     setMounted(true);
     // If not in VS Code, auto-default to export mode
     if (typeof window !== "undefined" && !window.acquireVsCodeApi) {
       setExportMode("export");
+    } else {
     }
+  }, []);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (message.type === "nextAppInitStatus") {
+        setInitStatus(message.payload.status);
+        if (message.payload.error) {
+          console.error("[Layoutica Webview] Initialization error details:", message.payload.error);
+          setInitError(message.payload.error);
+        }
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   // Sync workspace files live if exportMode === 'live'
@@ -43,14 +63,14 @@ export default function BuilderPage() {
     if (exportMode === "live") {
       const vscode = getVsCodeApi();
       if (vscode) {
-        const files = generateAllPages(pages, components);
+        const files = generateAllPages(pages, components, designTokens);
         vscode.postMessage({
           type: "writeWorkspaceFiles",
           payload: { files },
         });
       }
     }
-  }, [pages, components, exportMode]);
+  }, [pages, components, designTokens, exportMode]);
 
   // Use a ref for the sidebar to avoid unnecessary re-renders, but we'll use state-driven styles for the animation
   // Actually, we'll just use the store values directly in the render logic with CSS transitions.
@@ -106,6 +126,49 @@ export default function BuilderPage() {
                 </div>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {mounted && initStatus === "initializing" && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/85 backdrop-blur-md select-none">
+          <div className="bg-[#18181b] border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.9)] rounded-2xl p-8 max-w-[400px] w-full mx-4 flex flex-col items-center gap-6 text-center">
+            {/* Spinning Loader Ring */}
+            <div className="w-10 h-10 border-2 border-white/10 border-t-accent-blue rounded-full animate-spin" />
+            <div className="flex flex-col gap-2">
+              <span className="text-md font-bold text-white tracking-tight">
+                Initializing Next.js Project
+              </span>
+              <span className="text-xs text-white/40 leading-relaxed px-2">
+                Running <code className="text-accent-blue bg-white/5 px-1.5 py-0.5 rounded font-mono text-[10px]">create-next-app</code> to set up the workspace. This may take up to a minute...
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mounted && initStatus === "error" && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/85 backdrop-blur-md select-none">
+          <div className="bg-[#18181b] border border-red-500/25 shadow-[0_32px_80px_rgba(0,0,0,0.9)] rounded-2xl p-8 max-w-[420px] w-full mx-4 flex flex-col items-center gap-5 text-center">
+            <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 font-bold text-lg">
+              !
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-md font-bold text-white tracking-tight">
+                Initialization Failed
+              </span>
+              <p className="text-xs text-white/40 leading-relaxed max-h-[120px] overflow-y-auto px-2 font-mono text-left bg-black/25 rounded border border-white/5 p-2 w-full">
+                {initError || "An unknown error occurred during create-next-app execution."}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setInitStatus("idle");
+                setExportMode(null); // Let them choose mode or retry
+              }}
+              className="mt-2 text-xs bg-white/10 hover:bg-white/15 text-white/90 font-medium px-4 py-2 rounded-lg cursor-pointer transition-colors"
+            >
+              Go Back
+            </button>
           </div>
         </div>
       )}

@@ -11,6 +11,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useBuilderStore } from "@/lib/builder/store";
 import { ElementType, CanvasElement } from "@/lib/builder/types";
+import { resolveDeviceDimensions, DEVICE_PRESETS } from "@/lib/builder/devices";
 import { defaultElement } from "./Sidebar";
 import * as LucideIcons from "lucide-react";
 
@@ -106,6 +107,7 @@ function buildStateCSS(elements: CanvasElement[]): string {
 function HoverActiveStyleSheet() {
   const pages = useBuilderStore((s) => s.pages);
   const activePageId = useBuilderStore((s) => s.activePageId);
+  const designTokens = useBuilderStore((s) => s.designTokens);
   const activePage = pages.find((p) => p.id === activePageId);
   useEffect(() => {
     const css = activePage ? buildStateCSS(activePage.elements) : "";
@@ -116,10 +118,20 @@ function HoverActiveStyleSheet() {
       tag.id = id;
       document.head.appendChild(tag);
     }
-    tag.textContent = css;
+    let tokenCss = "";
+    if (designTokens && designTokens.colors) {
+      const varLines = designTokens.colors.map(
+        (c) => `--color-${c.name.toLowerCase().replace(/[^a-z0-9]/gi, "-")}: ${c.value};`
+      );
+      tokenCss = `:root {\n${varLines.map((l) => `  ${l}`).join("\n")}\n}\n\n`;
+    }
+    tag.textContent = tokenCss + css;
   });
   return null;
 }
+
+
+
 function ContextMenu({
   x,
   y,
@@ -596,7 +608,37 @@ function RenderElement({
     updateElement,
     activePageId,
     setActivePage,
+    canvasBreakpoint,
+    customWidth,
+    customHeight,
   } = useBuilderStore();
+
+  const preset = DEVICE_PRESETS.find((d) => d.id === canvasBreakpoint);
+  let activeCategory: "Desktop" | "Tablet" | "Mobile" = "Desktop";
+  if (preset) {
+    activeCategory = preset.type;
+  } else if (canvasBreakpoint === "desktop") {
+    activeCategory = "Desktop";
+  } else if (canvasBreakpoint === "tablet") {
+    activeCategory = "Tablet";
+  } else if (canvasBreakpoint === "mobile") {
+    activeCategory = "Mobile";
+  } else {
+    const width = resolveDeviceDimensions(canvasBreakpoint, customWidth, customHeight).width;
+    if (width < 768) activeCategory = "Mobile";
+    else if (width < 1024) activeCategory = "Tablet";
+    else activeCategory = "Desktop";
+  }
+
+  const showOnCurrentBreakpoint = (() => {
+    const showDesktop = el.responsiveVisibility?.desktop ?? true;
+    const showTablet = el.responsiveVisibility?.tablet ?? true;
+    const showMobile = el.responsiveVisibility?.mobile ?? true;
+    if (activeCategory === "Desktop") return showDesktop;
+    if (activeCategory === "Tablet") return showTablet;
+    return showMobile;
+  })();
+
   const isSelected = selectedElementId === el.id;
   const isMultiSelected = (selectedElementIds ?? []).includes(el.id);
   const isAnySelected = isSelected || isMultiSelected;
@@ -620,7 +662,7 @@ function RenderElement({
     "figure",
   ].includes(el.type);
   const isTextType = TEXT_TYPES.has(el.type);
-  const isHidden = !!el.metadata?.isHidden;
+  const isHidden = !!el.metadata?.isHidden || !showOnCurrentBreakpoint;
   const isLocked = !!el.metadata?.isLocked;
   const isResizing = useRef(false);
   const startPos = useRef({ x: 0, y: 0 });
@@ -687,25 +729,31 @@ function RenderElement({
       e.stopPropagation();
       isResizing.current = true;
       startPos.current = { x: e.clientX, y: e.clientY };
-      const rect = (
-        e.currentTarget as HTMLElement
-      ).parentElement?.getBoundingClientRect();
+
+      const handleEl = e.currentTarget as HTMLElement;
+      const artboardEl = handleEl.closest('[data-artboard="true"]') as HTMLElement | null;
+      const startScrollTop = artboardEl ? artboardEl.scrollTop : 0;
+
+      let currentMouseX = e.clientX;
+      let currentMouseY = e.clientY;
+
+      const rect = handleEl.parentElement?.getBoundingClientRect();
       if (rect) {
         startSize.current = {
           width: rect.width / zoom,
           height: rect.height / zoom,
         };
       }
-      const onMove = (mv: MouseEvent) => {
-        if (!isResizing.current) return;
-        const dx = (mv.clientX - startPos.current.x) / zoom;
-        const dy = (mv.clientY - startPos.current.y) / zoom;
+
+      const updateResize = (mouseX: number, mouseY: number, scrollDeltaVal: number) => {
+        const dx = (mouseX - startPos.current.x) / zoom;
+        const dy = (mouseY - startPos.current.y) / zoom;
         const updates: any = {};
         if (direction === "right" || direction === "both") {
           updates.width = `${Math.max(40, startSize.current.width + dx)}px`;
         }
         if (direction === "bottom" || direction === "both") {
-          updates.height = `${Math.max(20, startSize.current.height + dy)}px`;
+          updates.height = `${Math.max(20, startSize.current.height + dy + scrollDeltaVal)}px`;
         }
         updateElement(el.id, {
           styles: {
@@ -714,11 +762,63 @@ function RenderElement({
           },
         });
       };
+
+      let animationFrameId: number | null = null;
+      let lastTime = performance.now();
+
+      const scrollLoop = () => {
+        if (!isResizing.current || !artboardEl) return;
+
+        const now = performance.now();
+        const dt = now - lastTime;
+        lastTime = now;
+
+        const artboardRect = artboardEl.getBoundingClientRect();
+        const threshold = 40; // px in screen space
+        const maxScrollSpeed = 0.4; // CSS px per ms
+
+        let scrollSpeed = 0;
+        if (currentMouseY > artboardRect.bottom - threshold && currentMouseY < artboardRect.bottom + 20) {
+          const ratio = Math.min(1, (currentMouseY - (artboardRect.bottom - threshold)) / threshold);
+          scrollSpeed = ratio * maxScrollSpeed;
+        } else if (currentMouseY < artboardRect.top + threshold && currentMouseY > artboardRect.top - 20) {
+          const ratio = Math.min(1, ((artboardRect.top + threshold) - currentMouseY) / threshold);
+          scrollSpeed = -ratio * maxScrollSpeed;
+        }
+
+        if (scrollSpeed !== 0) {
+          artboardEl.scrollTop = Math.max(
+            0,
+            Math.min(artboardEl.scrollHeight - artboardEl.clientHeight, artboardEl.scrollTop + scrollSpeed * dt)
+          );
+          const scrollDeltaVal = artboardEl.scrollTop - startScrollTop;
+          updateResize(currentMouseX, currentMouseY, scrollDeltaVal);
+        }
+
+        animationFrameId = requestAnimationFrame(scrollLoop);
+      };
+
+      if (artboardEl) {
+        animationFrameId = requestAnimationFrame(scrollLoop);
+      }
+
+      const onMove = (mv: MouseEvent) => {
+        if (!isResizing.current) return;
+        currentMouseX = mv.clientX;
+        currentMouseY = mv.clientY;
+        const scrollDeltaVal = artboardEl ? artboardEl.scrollTop - startScrollTop : 0;
+        updateResize(currentMouseX, currentMouseY, scrollDeltaVal);
+      };
+
       const onUp = () => {
         isResizing.current = false;
+        if (animationFrameId !== null) {
+          cancelAnimationFrame(animationFrameId);
+        }
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
       };
+
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
@@ -758,6 +858,7 @@ function RenderElement({
     overflow: (finalStyles.overflow as any) || undefined,
     boxSizing: "border-box",
     ...finalStyles,
+    flexShrink: finalStyles.flexShrink !== undefined ? (finalStyles.flexShrink as any) : (parentId === undefined ? 0 : undefined),
     outline: isEditing
       ? "2px solid #0d99ff"
       : isSelected
@@ -825,12 +926,15 @@ function RenderElement({
     legend: "legend",
     fieldset: "fieldset",
   };
-  const htmlTag = el.htmlTag || TAG_MAP[el.type] || "div";
+  const htmlTag = el.htmlTag || (el.type === "button" && el.href ? "a" : TAG_MAP[el.type]) || "div";
 
   const wrapperProps: any = {
     "data-bid": el.id,
     style: wrapperStyle,
     onClick: (e: React.MouseEvent) => {
+      if (el.type === "button" && el.href) {
+        e.preventDefault();
+      }
       e.stopPropagation();
       if (isEditing) return;
       if (activePageId !== pageId) {
@@ -879,6 +983,9 @@ function RenderElement({
       onContextMenu(e, el.id);
     },
   };
+  if (htmlTag === "a" || (el.type === "button" && el.href)) {
+    wrapperProps.href = el.href || "#";
+  }
   const renderContent = () => {
     if (isEditing && isTextType)
       return (
@@ -1722,8 +1829,8 @@ function SpacingOverlay({ mode }: { mode: "padding" | "margin" }) {
       if (!t && !ri && !b && !l) continue;
 
       const scale = currentScale || 1;
-      const relativeTop = (r.top - artboardRect.top) / scale;
-      const relativeLeft = (r.left - artboardRect.left) / scale;
+      const relativeTop = (r.top - artboardRect.top) / scale + artboardNode.scrollTop;
+      const relativeLeft = (r.left - artboardRect.left) / scale + artboardNode.scrollLeft;
       const relativeWidth = r.width / scale;
       const relativeHeight = r.height / scale;
 
@@ -1858,8 +1965,13 @@ export default function Canvas() {
     }
   }, [pages, isolatedPageId]);
 
+
+
   // PATCH 1: read canvas view settings from store
   const canvasBreakpoint = useBuilderStore((s) => s.canvasBreakpoint);
+  const customWidth = useBuilderStore((s) => s.customWidth);
+  const customHeight = useBuilderStore((s) => s.customHeight);
+  const viewportClip = useBuilderStore((s) => s.viewportClip);
   const showGrid = useBuilderStore((s) => s.showGrid);
   const showPadding = useBuilderStore((s) => s.showPadding);
   const showMargin = useBuilderStore((s) => s.showMargin);
@@ -1869,6 +1981,7 @@ export default function Canvas() {
   const page = getActivePage();
 
   const [zoom, setZoom] = useState(1);
+
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [animateTransform, setAnimateTransform] = useState(false);
   const [isDraggingOverVoid, setIsDraggingOverVoid] = useState(false);
@@ -1955,31 +2068,32 @@ export default function Canvas() {
     const rect = container.getBoundingClientRect();
     const activeIndex = pages.findIndex((p) => p.id === activePageId);
     const idx = !isolatedPageId && activeIndex >= 0 ? activeIndex : 0;
-    const artboardWidth =
-      canvasBreakpoint === "tablet"
-        ? 768
-        : canvasBreakpoint === "mobile"
-          ? 390
-          : 1280;
+    const { width: resolvedWidth, height: resolvedHeight } = resolveDeviceDimensions(
+      canvasBreakpoint,
+      customWidth,
+      customHeight
+    );
+    const artboardWidth = resolvedWidth;
+    const artboardHeight = viewportClip ? resolvedHeight : 550;
 
     const padding = 80;
     const availableWidth = rect.width - padding;
     const initialZoom = Math.min(availableWidth / artboardWidth, 1.0);
 
     const availableHeight = rect.height - padding;
-    const initialZoomH = Math.min(availableHeight / 550, 1.0);
+    const initialZoomH = Math.min(availableHeight / artboardHeight, 1.0);
 
     const finalZoom = Math.max(0.15, Math.min(initialZoom, initialZoomH, 1.0));
 
     const pageX = 160 + idx * (artboardWidth + 120) + artboardWidth / 2;
-    const pageY = 160 + 550 / 2;
+    const pageY = 160 + artboardHeight / 2;
 
     setZoom(finalZoom);
     setPan({
       x: rect.width / 2 - pageX * finalZoom,
       y: rect.height / 2 - pageY * finalZoom,
     });
-  }, [canvasBreakpoint, setZoom, setPan, pages, activePageId, isolatedPageId]);
+  }, [canvasBreakpoint, customWidth, customHeight, viewportClip, setZoom, setPan, pages, activePageId, isolatedPageId]);
 
   const centerArtboard = useCallback(() => {
     const container = canvasContainerRef.current;
@@ -1987,21 +2101,22 @@ export default function Canvas() {
     const rect = container.getBoundingClientRect();
     const activeIndex = pages.findIndex((p) => p.id === activePageId);
     const idx = !isolatedPageId && activeIndex >= 0 ? activeIndex : 0;
-    const artboardWidth =
-      canvasBreakpoint === "tablet"
-        ? 768
-        : canvasBreakpoint === "mobile"
-          ? 390
-          : 1280;
+    const { width: resolvedWidth, height: resolvedHeight } = resolveDeviceDimensions(
+      canvasBreakpoint,
+      customWidth,
+      customHeight
+    );
+    const artboardWidth = resolvedWidth;
+    const artboardHeight = viewportClip ? resolvedHeight : 550;
 
     const pageX = 160 + idx * (artboardWidth + 120) + artboardWidth / 2;
-    const pageY = 160 + 550 / 2;
+    const pageY = 160 + artboardHeight / 2;
 
     setPan({
       x: rect.width / 2 - pageX * zoom,
       y: rect.height / 2 - pageY * zoom,
     });
-  }, [canvasBreakpoint, zoom, pages, activePageId, isolatedPageId]);
+  }, [canvasBreakpoint, customWidth, customHeight, viewportClip, zoom, pages, activePageId, isolatedPageId]);
 
   const centerArtboardRef = useRef(centerArtboard);
   useEffect(() => {
@@ -2021,26 +2136,18 @@ export default function Canvas() {
   }, []);
 
   useEffect(() => {
-    // Re-center when panels toggle, after DOM transitions settle
-    const timer = setTimeout(() => {
-      centerArtboardRef.current();
-    }, 320); // match transition times
-    return () => clearTimeout(timer);
-  }, [leftSidebarCollapsed, rightPanelCollapsed]);
-
-  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      const isTyping =
+        active &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          (active as HTMLElement).isContentEditable);
+      if (isTyping) return;
+
       if (e.code === "Space") {
-        const active = document.activeElement;
-        const isTyping =
-          active &&
-          (active.tagName === "INPUT" ||
-            active.tagName === "TEXTAREA" ||
-            (active as HTMLElement).isContentEditable);
-        if (!isTyping) {
-          e.preventDefault();
-          setIsSpacePressed(true);
-        }
+        e.preventDefault();
+        setIsSpacePressed(true);
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -2069,8 +2176,37 @@ export default function Canvas() {
   }, []);
 
   const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
+    // Find if the target has scrollable ancestor
+    let target = e.target as HTMLElement | null;
+    let shouldScrollTarget = false;
     const container = canvasContainerRef.current;
+
+    if (container && target) {
+      let curr = target;
+      while (curr && curr !== container) {
+        const style = window.getComputedStyle(curr);
+        const hasScrollX = (style.overflowX === "auto" || style.overflowX === "scroll") && curr.scrollWidth > curr.clientWidth;
+        const hasScrollY = (style.overflowY === "auto" || style.overflowY === "scroll") && curr.scrollHeight > curr.clientHeight;
+
+        if (hasScrollX || hasScrollY) {
+          if (e.deltaX !== 0 && hasScrollX) {
+            shouldScrollTarget = true;
+            break;
+          }
+          if (e.deltaY !== 0 && hasScrollY && !e.ctrlKey) {
+            shouldScrollTarget = true;
+            break;
+          }
+        }
+        curr = curr.parentElement as HTMLElement;
+      }
+    }
+
+    if (shouldScrollTarget) {
+      return;
+    }
+
+    e.preventDefault();
     if (!container) return;
     const rect = container.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -2537,6 +2673,13 @@ export default function Canvas() {
         >
           {(isolatedPageId ? pages.filter((p) => p.id === isolatedPageId) : pages).map((pg) => {
             const hasElements = pg.elements.length > 0;
+            const { width: resolvedWidth, height: resolvedHeight } = resolveDeviceDimensions(
+              canvasBreakpoint,
+              customWidth,
+              customHeight
+            );
+            const simulatedHeight = resolvedHeight;
+
             return (
               <div
                 key={pg.id}
@@ -2583,27 +2726,36 @@ export default function Canvas() {
                   data-artboard-id={pg.id}
                   style={{
                     pointerEvents: "auto",
-                    width:
-                      canvasBreakpoint === "tablet"
-                        ? "768px"
-                        : canvasBreakpoint === "mobile"
-                          ? "390px"
-                          : "1280px",
+                    width: `${resolvedWidth}px`,
                     backgroundColor: "transparent",
                     boxShadow: "none",
                     display: "flex",
                     flexDirection: "column",
-                    minHeight: hasElements ? "0px" : "550px",
-                    height: "auto",
+                    minHeight: viewportClip
+                      ? `${simulatedHeight}px`
+                      : hasElements
+                        ? "0px"
+                        : "550px",
+                    height: viewportClip
+                      ? `${simulatedHeight}px`
+                      : "auto",
+                    overflowY: viewportClip
+                      ? "auto"
+                      : "visible",
+                    scrollbarWidth: "thin",
+                    scrollbarColor: "rgba(255,255,255,0.15) transparent",
                     borderRadius: "4px",
                     transition:
                       "width 0.3s cubic-bezier(0.4,0,0.2,1), background-color 0.25s, box-shadow 0.25s",
                     position: "relative",
                     cursor: "default",
-                    overflowX: "hidden",
+                    overflowX: viewportClip ? "auto" : "visible",
                     border: pg.id === activePageId ? "1px solid rgba(13,153,255,0.45)" : "1px dashed rgba(255,255,255,0.08)",
                     outline: pg.id === activePageId ? "4px solid rgba(13,153,255,0.08)" : "none",
                     outlineOffset: "2px",
+                    backgroundImage: viewportClip
+                      ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 8px, transparent 8px, transparent 16px)"
+                      : "none",
                   }}
                   onDragEnter={(e) => {
                     e.stopPropagation();
@@ -2685,17 +2837,45 @@ export default function Canvas() {
                       </p>
                     </div>
                   ) : (
-                    pg.elements.map((el, index) => (
-                      <RenderElement
-                        key={el.id}
-                        el={el}
-                        index={index}
-                        parentId={undefined}
-                        pageId={pg.id}
-                        parentIsHorizontal={false}
-                        {...sharedProps}
-                      />
-                    ))
+                    <>
+                      {pg.elements.map((el, index) => (
+                        <RenderElement
+                          key={el.id}
+                          el={el}
+                          index={index}
+                          parentId={undefined}
+                          pageId={pg.id}
+                          parentIsHorizontal={false}
+                          {...sharedProps}
+                        />
+                      ))}
+                      {viewportClip && (
+                        <div
+                          style={{
+                            flex: "1 1 0%",
+                            minHeight: 0,
+                            overflow: "hidden",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundImage: "repeating-linear-gradient(45deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 8px, transparent 8px, transparent 16px)",
+                            borderTop: "1px dashed rgba(255,255,255,0.05)",
+                            color: "rgba(255, 255, 255, 0.25)",
+                            fontSize: "11px",
+                            fontWeight: 500,
+                            fontFamily: "sans-serif",
+                            pointerEvents: "none",
+                            userSelect: "none",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "12px" }}>
+                            <span style={{ letterSpacing: "0.05em", textTransform: "uppercase", fontSize: "9px" }}>
+                              Vacant Viewport Space
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   {pg.id === activePageId && showPadding && <SpacingOverlay mode="padding" />}
                   {pg.id === activePageId && showMargin && <SpacingOverlay mode="margin" />}

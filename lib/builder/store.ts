@@ -11,6 +11,7 @@ import {
   CanvasBackground,
 } from "./types";
 import { DesignTokens } from "./projectSaverLoader";
+import { resolveDeviceDimensions, DEVICE_PRESETS } from "./devices";
 
 const DEFAULT_TOKENS: DesignTokens = {
   colors: [
@@ -202,6 +203,7 @@ const defaultPage: Page = {
             fontWeight: "600",
             cursor: "pointer",
             display: "inline-block",
+            textAlign: "center",
           },
         },
       ],
@@ -243,6 +245,118 @@ function scheduleHistoryCommit(
   }, 400);
 }
 
+function isStructureEqual(el1: CanvasElement, el2: CanvasElement): boolean {
+  if (el1.type !== el2.type) return false;
+
+  const {
+    id: _id1,
+    children: _c1,
+    styles: _s1,
+    hoverStyles: _h1,
+    activeStyles: _a1,
+    focusStyles: _f1,
+    savedComponentId: _sc1,
+    metadata: _m1,
+    ...props1
+  } = el1;
+
+  const {
+    id: _id2,
+    children: _c2,
+    styles: _s2,
+    hoverStyles: _h2,
+    activeStyles: _a2,
+    focusStyles: _f2,
+    savedComponentId: _sc2,
+    metadata: _m2,
+    ...props2
+  } = el2;
+
+  if (JSON.stringify(props1) !== JSON.stringify(props2)) return false;
+  if (JSON.stringify(el1.styles || {}) !== JSON.stringify(el2.styles || {})) return false;
+  if (JSON.stringify(el1.hoverStyles || {}) !== JSON.stringify(el2.hoverStyles || {})) return false;
+  if (JSON.stringify(el1.activeStyles || {}) !== JSON.stringify(el2.activeStyles || {})) return false;
+  if (JSON.stringify(el1.focusStyles || {}) !== JSON.stringify(el2.focusStyles || {})) return false;
+
+  const children1 = el1.children || [];
+  const children2 = el2.children || [];
+  if (children1.length !== children2.length) return false;
+
+  for (let i = 0; i < children1.length; i++) {
+    if (!isStructureEqual(children1[i], children2[i])) return false;
+  }
+
+  return true;
+}
+
+function syncColorsInElement(
+  el: CanvasElement,
+  replacements: { from: string; to: string }[]
+): CanvasElement {
+  const updatedEl = { ...el };
+
+  const replaceColor = (val: string | undefined): string | undefined => {
+    if (!val) return val;
+    let current = val;
+    for (const { from, to } of replacements) {
+      if (from.startsWith("var(")) {
+        current = current.replaceAll(from, to);
+      } else {
+        const cleanFrom = from.trim();
+        const escapedFrom = cleanFrom.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+        let regex: RegExp;
+        if (cleanFrom.startsWith("#")) {
+          regex = new RegExp(`${escapedFrom}(?![0-9a-fA-F])`, "gi");
+        } else {
+          regex = new RegExp(escapedFrom, "gi");
+        }
+        current = current.replace(regex, to);
+      }
+    }
+    return current;
+  };
+
+  if (updatedEl.styles) {
+    const updatedStyles = { ...updatedEl.styles } as any;
+    for (const key of Object.keys(updatedStyles)) {
+      if (typeof updatedStyles[key] === "string") {
+        updatedStyles[key] = replaceColor(updatedStyles[key]);
+      }
+    }
+    updatedEl.styles = updatedStyles;
+  }
+
+  if (updatedEl.hoverStyles) {
+    const updated = { ...updatedEl.hoverStyles } as any;
+    for (const key of Object.keys(updated)) {
+      if (typeof updated[key] === "string") updated[key] = replaceColor(updated[key]);
+    }
+    updatedEl.hoverStyles = updated;
+  }
+  if (updatedEl.activeStyles) {
+    const updated = { ...updatedEl.activeStyles } as any;
+    for (const key of Object.keys(updated)) {
+      if (typeof updated[key] === "string") updated[key] = replaceColor(updated[key]);
+    }
+    updatedEl.activeStyles = updated;
+  }
+  if (updatedEl.focusStyles) {
+    const updated = { ...updatedEl.focusStyles } as any;
+    for (const key of Object.keys(updated)) {
+      if (typeof updated[key] === "string") updated[key] = replaceColor(updated[key]);
+    }
+    updatedEl.focusStyles = updated;
+  }
+
+  if (updatedEl.children && updatedEl.children.length > 0) {
+    updatedEl.children = updatedEl.children.map((c) =>
+      syncColorsInElement(c, replacements)
+    );
+  }
+
+  return updatedEl;
+}
+
 export const useBuilderStore = create<BuilderState>((set, get) => ({
   pages: [defaultPage],
   activePageId: "page-1",
@@ -259,6 +373,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   leftSidebarCollapsed: false,
 
   canvasBreakpoint: "desktop" as CanvasBreakpoint,
+  customWidth: 1000,
+  customHeight: 800,
+  viewportClip: false,
   canvasBackground: "dark" as CanvasBackground,
   showGrid: true,
   showPadding: false,
@@ -354,8 +471,46 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   },
 
   addElement: (element, parentId, targetIndex) => {
-    const { pages, activePageId, past } = get();
-    const newEl: CanvasElement = { ...element, id: `el-${generateId()}` };
+    const {
+      pages,
+      activePageId,
+      past,
+      canvasBreakpoint,
+      customWidth,
+      customHeight,
+    } = get();
+
+    const preset = DEVICE_PRESETS.find((d) => d.id === canvasBreakpoint);
+    let activeCategory: "Desktop" | "Tablet" | "Mobile" = "Desktop";
+    if (preset) {
+      activeCategory = preset.type;
+    } else if (canvasBreakpoint === "desktop") {
+      activeCategory = "Desktop";
+    } else if (canvasBreakpoint === "tablet") {
+      activeCategory = "Tablet";
+    } else if (canvasBreakpoint === "mobile") {
+      activeCategory = "Mobile";
+    } else {
+      const width = resolveDeviceDimensions(canvasBreakpoint, customWidth, customHeight).width;
+      if (width < 768) activeCategory = "Mobile";
+      else if (width < 1024) activeCategory = "Tablet";
+      else activeCategory = "Desktop";
+    }
+
+    const defaultVis = activeCategory === "Desktop"
+      ? { desktop: true, tablet: true, mobile: true }
+      : {
+          desktop: false,
+          tablet: activeCategory === "Tablet",
+          mobile: activeCategory === "Mobile"
+        };
+
+    const newEl: CanvasElement = {
+      ...element,
+      id: `el-${generateId()}`,
+      responsiveVisibility: element.responsiveVisibility || defaultVis
+    };
+
     const insertIntoArray = (arr: CanvasElement[]) => {
       const newArr = [...(arr || [])];
       const index = targetIndex !== undefined ? targetIndex : newArr.length;
@@ -397,7 +552,47 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   },
 
   setDesignTokens: (tokens) => {
-    set({ designTokens: tokens });
+    const oldTokens = get().designTokens;
+    const { pages, components } = get();
+    
+    const replacements: { from: string; to: string }[] = [];
+
+    if (oldTokens && oldTokens.colors && tokens && tokens.colors) {
+      for (const newColor of tokens.colors) {
+        const oldColor = oldTokens.colors.find((c) => c.id === newColor.id);
+        const newVar = `var(--color-${newColor.name.toLowerCase().replace(/[^a-z0-9]/gi, "-")})`;
+        
+        if (oldColor) {
+          const oldVar = `var(--color-${oldColor.name.toLowerCase().replace(/[^a-z0-9]/gi, "-")})`;
+          if (oldColor.name !== newColor.name) {
+            replacements.push({ from: oldVar, to: newVar });
+          }
+          replacements.push({ from: newColor.value, to: newVar });
+        } else {
+          replacements.push({ from: newColor.value, to: newVar });
+        }
+      }
+    }
+
+    let updatedPages = pages;
+    let updatedComponents = components;
+
+    if (replacements.length > 0) {
+      updatedPages = pages.map((p) => ({
+        ...p,
+        elements: p.elements.map((el) => syncColorsInElement(el, replacements)),
+      }));
+      updatedComponents = components.map((comp) => ({
+        ...comp,
+        element: syncColorsInElement(comp.element, replacements),
+      }));
+    }
+
+    set({
+      designTokens: tokens,
+      pages: updatedPages,
+      components: updatedComponents,
+    });
   },
 
   reorderElement: (sourceId, targetParentId, targetIndex) => {
@@ -600,27 +795,85 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   },
 
   deleteElement: (id) => {
-    const { pages, activePageId, past, selectedElementId, selectedElementIds } =
-      get();
-    const removeFromTree = (elements: CanvasElement[]): CanvasElement[] =>
-      elements
-        .filter((el) => el.id !== id)
-        .map((el) =>
-          el.children ? { ...el, children: removeFromTree(el.children) } : el,
-        );
-    set({
-      pages: pages.map((p) =>
-        p.id === activePageId
-          ? { ...p, elements: removeFromTree(p.elements) }
-          : p,
-      ),
-      selectedElementId: selectedElementId === id ? null : selectedElementId,
-      selectedElementIds: (selectedElementIds ?? []).filter(
-        (sid) => sid !== id,
-      ),
-      past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
-      future: [],
-    });
+    const {
+      pages,
+      activePageId,
+      past,
+      selectedElementId,
+      selectedElementIds,
+      canvasBreakpoint,
+      customWidth,
+      customHeight,
+    } = get();
+
+    const preset = DEVICE_PRESETS.find((d) => d.id === canvasBreakpoint);
+    let activeCategory: "Desktop" | "Tablet" | "Mobile" = "Desktop";
+    if (preset) {
+      activeCategory = preset.type;
+    } else if (canvasBreakpoint === "desktop") {
+      activeCategory = "Desktop";
+    } else if (canvasBreakpoint === "tablet") {
+      activeCategory = "Tablet";
+    } else if (canvasBreakpoint === "mobile") {
+      activeCategory = "Mobile";
+    } else {
+      const width = resolveDeviceDimensions(canvasBreakpoint, customWidth, customHeight).width;
+      if (width < 768) activeCategory = "Mobile";
+      else if (width < 1024) activeCategory = "Tablet";
+      else activeCategory = "Desktop";
+    }
+
+    if (activeCategory === "Desktop") {
+      const removeFromTree = (elements: CanvasElement[]): CanvasElement[] =>
+        elements
+          .filter((el) => el.id !== id)
+          .map((el) =>
+            el.children ? { ...el, children: removeFromTree(el.children) } : el,
+          );
+      set({
+        pages: pages.map((p) =>
+          p.id === activePageId
+            ? { ...p, elements: removeFromTree(p.elements) }
+            : p,
+        ),
+        selectedElementId: selectedElementId === id ? null : selectedElementId,
+        selectedElementIds: (selectedElementIds ?? []).filter(
+          (sid) => sid !== id,
+        ),
+        past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
+        future: [],
+      });
+    } else {
+      const hideInTree = (elements: CanvasElement[]): CanvasElement[] =>
+        elements.map((el) => {
+          if (el.id === id) {
+            const currentVis = el.responsiveVisibility || { desktop: true, tablet: true, mobile: true };
+            return {
+              ...el,
+              responsiveVisibility: {
+                desktop: currentVis.desktop ?? true,
+                tablet: currentVis.tablet ?? true,
+                mobile: currentVis.mobile ?? true,
+                [activeCategory.toLowerCase()]: false,
+              },
+            };
+          }
+          if (el.children) {
+            return { ...el, children: hideInTree(el.children) };
+          }
+          return el;
+        });
+
+      set({
+        pages: pages.map((p) =>
+          p.id === activePageId
+            ? { ...p, elements: hideInTree(p.elements) }
+            : p,
+        ),
+        past: [...past, snap(pages, activePageId)].slice(-MAX_HISTORY),
+        future: [],
+      });
+    }
   },
 
   selectElement: (id: string | null) =>
@@ -695,7 +948,30 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     };
     const updated = [...get().components, comp];
     saveComponents(updated);
-    set({ components: updated });
+
+    const { pages } = get();
+    const updateElementInTree = (elList: CanvasElement[]): CanvasElement[] => {
+      return elList.map((el) => {
+        const updatedEl = { ...el };
+        if (isStructureEqual(el, element)) {
+          updatedEl.savedComponentId = comp.id;
+        }
+        if (el.children && el.children.length > 0) {
+          updatedEl.children = updateElementInTree(el.children);
+        }
+        return updatedEl;
+      });
+    };
+
+    const newPages = pages.map((p) => ({
+      ...p,
+      elements: updateElementInTree(p.elements),
+    }));
+
+    set({
+      components: updated,
+      pages: newPages,
+    });
   },
 
   deleteComponent: (id) => {
@@ -770,6 +1046,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   setLeftSidebarCollapsed: (v: boolean) => set({ leftSidebarCollapsed: v }),
 
   setCanvasBreakpoint: (v: CanvasBreakpoint) => set({ canvasBreakpoint: v }),
+  setCustomWidth: (w: number) => set({ customWidth: w }),
+  setCustomHeight: (h: number) => set({ customHeight: h }),
+  setViewportClip: (clip: boolean) => set({ viewportClip: clip }),
   setCanvasBackground: (v: CanvasBackground) => set({ canvasBackground: v }),
   setShowGrid: (v: boolean) => set({ showGrid: v }),
   setShowPadding: (v: boolean) => set({ showPadding: v }),

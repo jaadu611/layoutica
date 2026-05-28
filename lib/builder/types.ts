@@ -207,6 +207,11 @@ export interface CanvasElement {
   tailwindClasses?: string;
   savedComponentId?: string;
   metadata?: { name?: string; isHidden?: boolean; isLocked?: boolean };
+  responsiveVisibility?: {
+    desktop?: boolean;
+    tablet?: boolean;
+    mobile?: boolean;
+  };
 }
 
 export interface Page {
@@ -230,7 +235,7 @@ export interface SavedComponent {
 
 export type SelectedState = "focus" | "hover" | "active" | "default";
 
-export type CanvasBreakpoint = "desktop" | "tablet" | "mobile";
+export type CanvasBreakpoint = string;
 export type CanvasBackground = "white" | "dark" | "checker";
 
 export interface BuilderState {
@@ -249,6 +254,9 @@ export interface BuilderState {
   rightPanelCollapsed: boolean;
 
   canvasBreakpoint: CanvasBreakpoint;
+  customWidth: number;
+  customHeight: number;
+  viewportClip: boolean;
   canvasBackground: CanvasBackground;
   showGrid: boolean;
   showPadding: boolean;
@@ -309,6 +317,9 @@ export interface BuilderState {
   setRightPanelCollapsed: (v: boolean) => void;
 
   setCanvasBreakpoint: (v: CanvasBreakpoint) => void;
+  setCustomWidth: (w: number) => void;
+  setCustomHeight: (h: number) => void;
+  setViewportClip: (clip: boolean) => void;
   setCanvasBackground: (v: CanvasBackground) => void;
   setShowGrid: (v: boolean) => void;
   setShowPadding: (v: boolean) => void;

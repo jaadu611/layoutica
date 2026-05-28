@@ -3,8 +3,72 @@ import * as path from "path";
 import * as fs from "fs";
 import { fileURLToPath } from "url";
 
+import { exec } from "child_process";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function writeFiles(workspacePath, files) {
+  for (const [relativePath, content] of Object.entries(files)) {
+    const filePath = path.join(workspacePath, relativePath);
+    const dirPath = path.dirname(filePath);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    fs.writeFileSync(filePath, content, "utf8");
+  }
+}
+
+function pruneDeletedPages(workspacePath, files) {
+  const appPath = path.join(workspacePath, "src", "app");
+  if (!fs.existsSync(appPath)) return;
+
+  function removeEmptyDirs(dirPath) {
+    if (dirPath === appPath) return;
+    try {
+      if (fs.existsSync(dirPath)) {
+        const children = fs.readdirSync(dirPath);
+        if (children.length === 0) {
+          fs.rmdirSync(dirPath);
+          removeEmptyDirs(path.dirname(dirPath));
+        }
+      }
+    } catch (e) {
+      console.error("[Layoutica Host] Failed to remove empty dir:", dirPath, e);
+    }
+  }
+
+  function scan(currentDir) {
+    let entries;
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch (e) {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        scan(fullPath);
+      } else if (entry.name === "page.tsx") {
+        const relativePath = path.relative(workspacePath, fullPath).replace(/\\/g, "/");
+        if (!files[relativePath]) {
+          try {
+            fs.unlinkSync(fullPath);
+            console.log(`[Layoutica Host] Pruned deleted page file: ${relativePath}`);
+            removeEmptyDirs(path.dirname(fullPath));
+          } catch (e) {
+            console.error(`[Layoutica Host] Failed to delete file: ${fullPath}`, e);
+          }
+        }
+      }
+    }
+  }
+
+  scan(appPath);
+}
+
+let isInitializingNextApp = false;
 
 export function activate(context) {
   const openCommand = vscode.commands.registerCommand(
@@ -64,21 +128,114 @@ export function activate(context) {
           switch (message.type) {
             case "writeWorkspaceFiles": {
               const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-              if (!workspaceFolder) return;
+              if (!workspaceFolder) {
+                console.warn("[Layoutica Host] Cancelled writeWorkspaceFiles: No open workspace folders");
+                return;
+              }
               const files = message.payload.files;
-              try {
-                for (const [relativePath, content] of Object.entries(files)) {
-                  const fileUri = vscode.Uri.joinPath(
-                    workspaceFolder.uri,
-                    relativePath
-                  );
-                  const dirPath = path.dirname(fileUri.fsPath);
-                  if (!fs.existsSync(dirPath)) {
-                    fs.mkdirSync(dirPath, { recursive: true });
+
+              const packageJsonPath = path.join(
+                workspaceFolder.uri.fsPath,
+                "package.json"
+              );
+              if (!fs.existsSync(packageJsonPath)) {
+                isInitializingNextApp = true;
+                
+                panel.webview.postMessage({
+                  type: "nextAppInitStatus",
+                  payload: { status: "initializing" },
+                });
+
+                vscode.window.withProgress(
+                  {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Initializing Next.js Project",
+                    cancellable: false,
+                  },
+                  async (progress) => {
+                    progress.report({
+                      message:
+                        "Running create-next-app (this may take a few seconds)...",
+                    });
+
+                    const cmd = 'npx -y create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm';
+                    
+                    const execPromise = new Promise((resolve, reject) => {
+                      exec(
+                        cmd,
+                        { cwd: workspaceFolder.uri.fsPath },
+                        (error, stdout, stderr) => {
+                          if (error) {
+                            console.error("[Layoutica Host] command failed with error:", error);
+                            reject(error);
+                          } else {
+                            resolve(true);
+                          }
+                        }
+                      );
+                    });
+
+                    try {
+                      await execPromise;
+
+                      // Clear globals.css except for standard tailwind directives
+                      const cssPath = path.join(
+                        workspaceFolder.uri.fsPath,
+                        "src",
+                        "app",
+                        "globals.css"
+                      );
+                      if (fs.existsSync(cssPath)) {
+                        const content = fs.readFileSync(cssPath, "utf8");
+                        const lines = content.split("\n");
+                        const topImports = lines.filter(
+                          (line) =>
+                            line.trim().startsWith("@import") ||
+                            line.trim().startsWith("@tailwind") ||
+                            line.trim().startsWith("@theme")
+                        );
+                        fs.writeFileSync(
+                          cssPath,
+                          topImports.join("\n") + "\n",
+                          "utf8"
+                        );
+                      }
+
+                      // Write layout files
+                      pruneDeletedPages(workspaceFolder.uri.fsPath, files);
+                      writeFiles(workspaceFolder.uri.fsPath, files);
+                      
+                      vscode.window.showInformationMessage(
+                        "Next.js project successfully initialized and synced!"
+                      );
+                      panel.webview.postMessage({
+                        type: "nextAppInitStatus",
+                        payload: { status: "success" },
+                      });
+                    } catch (err) {
+                      console.error("[Layoutica Host] Error during initialization:", err);
+                      vscode.window.showErrorMessage(
+                        `Failed to initialize Next.js app: ${
+                          err.message || String(err)
+                        }`
+                      );
+                      panel.webview.postMessage({
+                        type: "nextAppInitStatus",
+                        payload: { status: "error", error: err.message || String(err) },
+                      });
+                    } finally {
+                      isInitializingNextApp = false;
+                    }
                   }
-                  fs.writeFileSync(fileUri.fsPath, content, "utf8");
-                }
+                );
+                return;
+              }
+
+              try {
+                pruneDeletedPages(workspaceFolder.uri.fsPath, files);
+                writeFiles(workspaceFolder.uri.fsPath, files);
               } catch (err) {
+                console.error("[Layoutica Host] Direct write failed:", err);
                 vscode.window.showErrorMessage(
                   `Failed to sync files: ${err.message || String(err)}`
                 );

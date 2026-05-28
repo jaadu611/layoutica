@@ -318,6 +318,7 @@ export const defaultElement = (
         fontWeight: "600",
         cursor: "pointer",
         display: "inline-block",
+        textAlign: "center",
       },
     },
     input: {

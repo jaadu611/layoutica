@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import gsap from "gsap";
 import { useBuilderStore } from "@/lib/builder/store";
-import { StyleProps } from "@/lib/builder/types";
+import { StyleProps, CanvasElement } from "@/lib/builder/types";
 import {
   Link as LinkIcon,
   Unlink,
@@ -27,6 +27,9 @@ import {
   StretchVertical,
   Baseline,
   LayoutGrid,
+  Monitor,
+  Tablet,
+  Smartphone,
 } from "lucide-react";
 
 const FONT_FAMILIES = [
@@ -515,7 +518,7 @@ function ElementHeader({
   el,
   onRename,
 }: {
-  el: { id: string; type: string; metadata?: { name?: string } };
+  el: CanvasElement;
   onRename: (name: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -705,6 +708,17 @@ export default function PropertiesPanel() {
       updateElement(el.id, { activeStyles: {} });
     else if (stylingState === "focus")
       updateElement(el.id, { focusStyles: {} });
+  };
+
+  const updateVisibility = (key: "desktop" | "tablet" | "mobile", val: boolean) => {
+    updateElement(el.id, {
+      responsiveVisibility: {
+        desktop: el.responsiveVisibility?.desktop ?? true,
+        tablet: el.responsiveVisibility?.tablet ?? true,
+        mobile: el.responsiveVisibility?.mobile ?? true,
+        [key]: val,
+      },
+    });
   };
 
   // Read value from the correct style bucket for the active tab
@@ -1682,6 +1696,35 @@ export default function PropertiesPanel() {
           </Section>
         )}
 
+        <Section title="Breakpoint Visibility" collapsible defaultOpen={true}>
+          <div className="flex gap-1.5 mt-1 mb-1">
+            <ToggleButton
+              active={el.responsiveVisibility?.desktop ?? true}
+              onClick={() => updateVisibility("desktop", !(el.responsiveVisibility?.desktop ?? true))}
+              title="Visible on Desktop"
+            >
+              <Monitor size={12} className="mr-1" />
+              <span className="text-[10px] font-semibold">Desktop</span>
+            </ToggleButton>
+            <ToggleButton
+              active={el.responsiveVisibility?.tablet ?? true}
+              onClick={() => updateVisibility("tablet", !(el.responsiveVisibility?.tablet ?? true))}
+              title="Visible on Tablet"
+            >
+              <Tablet size={12} className="mr-1" />
+              <span className="text-[10px] font-semibold">Tablet</span>
+            </ToggleButton>
+            <ToggleButton
+              active={el.responsiveVisibility?.mobile ?? true}
+              onClick={() => updateVisibility("mobile", !(el.responsiveVisibility?.mobile ?? true))}
+              title="Visible on Mobile"
+            >
+              <Smartphone size={12} className="mr-1" />
+              <span className="text-[10px] font-semibold">Mobile</span>
+            </ToggleButton>
+          </div>
+        </Section>
+
         <Section title="Size & Space">
           <Row>
             <Field label="Width">
@@ -1699,6 +1742,43 @@ export default function PropertiesPanel() {
               />
             </Field>
           </Row>
+          <div className="flex flex-wrap gap-1 px-1 py-1 bg-black/10 rounded-lg mt-1 mb-2.5">
+            <button
+              onClick={() => updateStyle("height", "100vh")}
+              className="text-[9px] bg-white/5 hover:bg-white/10 text-white/70 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              title="Full screen height"
+            >
+              100vh
+            </button>
+            <button
+              onClick={() => updateStyle("height", "100dvh")}
+              className="text-[9px] bg-white/5 hover:bg-white/10 text-white/70 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              title="Dynamic viewport height (safari safe)"
+            >
+              100dvh
+            </button>
+            <button
+              onClick={() => updateStyle("height", "50vh")}
+              className="text-[9px] bg-white/5 hover:bg-white/10 text-white/70 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              title="Half screen height"
+            >
+              50vh
+            </button>
+            <button
+              onClick={() => updateStyle("height", "calc(100vh - 64px)")}
+              className="text-[9px] bg-white/5 hover:bg-white/10 text-white/70 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              title="Screen height minus navbar height"
+            >
+              100vh - nav
+            </button>
+            <button
+              onClick={() => updateStyle("flex", "1")}
+              className="text-[9px] bg-white/5 hover:bg-white/10 text-white/70 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              title="Stretches to fill remaining vertical space"
+            >
+              Flex Fill
+            </button>
+          </div>
           <Row>
             <Field label="Min W">
               <Input

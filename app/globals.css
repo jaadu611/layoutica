@@ -24,10 +24,20 @@
   --active-bg: rgba(255, 255, 255, 0.08);
 }
 
-* {
-  ::-webkit-scrollbar {
-    display: none;
-  }
+/* Standard custom scrollbar style for all scrollable containers in layoutica */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 @keyframes bounce {
@@ -42,4 +52,20 @@
 
 .cubic-bezier {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-artboard="true"]::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+[data-artboard="true"]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-radius: 3px !important;
+}
+[data-artboard="true"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+[data-artboard="true"]::-webkit-scrollbar-track {
+  background: transparent !important;
 }
