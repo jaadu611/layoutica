@@ -93,7 +93,7 @@ function loadComponents(): SavedComponent[] {
   return [];
 }
 
-function saveComponents(components: SavedComponent[]) {
+function saveComponents(_components: SavedComponent[]) {
   // Saved in-memory via zustand store state only
 }
 

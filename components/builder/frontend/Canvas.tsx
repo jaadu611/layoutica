@@ -163,7 +163,6 @@ function ContextMenu({
     setShowGrid,
     setShowPadding,
     setShowMargin,
-    clearCanvas,
     pages,
     setActivePage,
   } = useBuilderStore();
@@ -1943,8 +1942,6 @@ export default function Canvas() {
     updateElement,
     undo,
     redo,
-    canUndo,
-    canRedo,
     selectedElementId,
     selectedElementIds,
     editingElementId,
@@ -2475,7 +2472,6 @@ export default function Canvas() {
   }, []);
 
   if (!page) return null;
-  const hasElements = page.elements.length > 0;
   const multiCount = (selectedElementIds ?? []).length;
 
   const sharedProps = {
@@ -2492,8 +2488,8 @@ export default function Canvas() {
     onReorderDragOver: (
       e: React.DragEvent,
       id: string,
-      idx: number,
-      pId: string | undefined,
+      _idx: number,
+      _pId: string | undefined,
       pIsHorizontal: boolean,
       canHaveChildren: boolean,
     ) => {
@@ -2782,7 +2778,7 @@ export default function Canvas() {
                     else if (newType && !hasElements) addElement(defaultElement(newType));
                     else if (sourceId) reorderElement(sourceId, undefined, undefined);
                   }}
-                  onClick={(e) => {
+                  onClick={() => {
                     if (activePageId !== pg.id) {
                       setActivePage(pg.id);
                     }

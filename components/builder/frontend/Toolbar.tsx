@@ -12,18 +12,13 @@ import {
   Palette,
   Save,
   FolderOpen,
-  Monitor,
-  Tablet,
-  Smartphone,
   Grid3X3,
   Square,
   BoxSelect,
   Trash2,
-  Maximize2,
   Crop,
   ChevronDown,
   Search,
-  Scan,
 } from "lucide-react";
 import DesignTokensPanel from "./DesignTokensPanel";
 import { CanvasBackground, CanvasBreakpoint } from "@/lib/builder/frontend/types";
@@ -35,12 +30,6 @@ export interface CanvasViewSettings {
   showGrid: boolean;
   showPadding: boolean;
   showMargin: boolean;
-}
-
-
-
-function ToolbarDivider() {
-  return <div className="w-px h-5 bg-panel-border shrink-0" />;
 }
 
 function ToolbarBtn({
@@ -83,7 +72,6 @@ export default function Toolbar() {
     activePageId,
     undo,
     redo,
-    getActivePage,
     loadProject,
     setActivePage,
     canvasBreakpoint,
@@ -175,8 +163,6 @@ export default function Toolbar() {
     }
   };
 
-  const activePage = getActivePage();
-  const initialSlug = activePage?.slug ?? "/";
 
   return (
     <>

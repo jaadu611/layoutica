@@ -33,7 +33,6 @@ export interface LticaProject {
 const CURRENT_VERSION = "1.3.0";
 
 function migrateProject(project: LticaProject): LticaProject {
-  const v = project.metadata.version ?? "1.0.0";
   if (!Array.isArray(project.data.savedComponents)) {
     project.data.savedComponents = [];
   }
@@ -167,9 +166,7 @@ export const ProjectSaverLoader = {
 
       // Fallback cancel detection for browsers that don't fire "cancel":
       // listen for the window regaining focus after the picker closes with no file
-      let focusFired = false;
       const onWindowFocus = () => {
-        focusFired = true;
         // Give the input's onchange a tick to fire first
         setTimeout(() => {
           if (!input.files?.length) reject("cancelled");

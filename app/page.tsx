@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Toolbar from "@/components/builder/frontend/Toolbar";
 import Sidebar from "@/components/builder/frontend/Sidebar";
 import Canvas from "@/components/builder/frontend/Canvas";

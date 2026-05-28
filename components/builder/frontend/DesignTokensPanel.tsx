@@ -3,9 +3,6 @@
 import { useState } from "react";
 import { Plus, Trash2, Pipette } from "lucide-react";
 import { useBuilderStore } from "@/lib/builder/frontend/store";
-import { StyleProps } from "@/lib/builder/frontend/types";
-
-
 
 export interface ColorToken {
   id: string;
@@ -26,75 +23,6 @@ export interface DesignTokens {
   colors: ColorToken[];
   typography: TypographyToken[];
 }
-
-const DEFAULT_TOKENS: DesignTokens = {
-  colors: [
-    { id: "c1", name: "Primary", value: "#0d99ff" },
-    { id: "c2", name: "Secondary", value: "#111827" },
-    { id: "c3", name: "Accent", value: "#f59e0b" },
-    { id: "c4", name: "Surface", value: "#f9fafb" },
-    { id: "c5", name: "Text", value: "#374151" },
-    { id: "c6", name: "Muted", value: "#9ca3af" },
-  ],
-  typography: [
-    {
-      id: "t1",
-      name: "Display",
-      fontSize: "56px",
-      fontWeight: "700",
-      lineHeight: "1.1",
-      letterSpacing: "-0.02em",
-    },
-    {
-      id: "t2",
-      name: "H1",
-      fontSize: "40px",
-      fontWeight: "700",
-      lineHeight: "1.2",
-      letterSpacing: "-0.01em",
-    },
-    {
-      id: "t3",
-      name: "H2",
-      fontSize: "28px",
-      fontWeight: "600",
-      lineHeight: "1.3",
-      letterSpacing: "0",
-    },
-    {
-      id: "t4",
-      name: "H3",
-      fontSize: "20px",
-      fontWeight: "600",
-      lineHeight: "1.4",
-      letterSpacing: "0",
-    },
-    {
-      id: "t5",
-      name: "Body",
-      fontSize: "16px",
-      fontWeight: "400",
-      lineHeight: "1.7",
-      letterSpacing: "0",
-    },
-    {
-      id: "t6",
-      name: "Small",
-      fontSize: "13px",
-      fontWeight: "400",
-      lineHeight: "1.5",
-      letterSpacing: "0",
-    },
-    {
-      id: "t7",
-      name: "Caption",
-      fontSize: "11px",
-      fontWeight: "500",
-      lineHeight: "1.4",
-      letterSpacing: "0.04em",
-    },
-  ],
-};
 
 
 

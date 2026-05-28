@@ -1,4 +1,4 @@
-import { CanvasElement, Page, SavedComponent, StyleProps } from "./types";
+import { CanvasElement, Page, SavedComponent } from "./types";
 import { DesignTokens } from "./projectSaverLoader";
 import { twMerge } from "tailwind-merge";
 import { clsx, type ClassValue } from "clsx";
