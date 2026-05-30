@@ -184,6 +184,7 @@ function triggerAutoSave(state: BuilderState) {
 }
 
 function doAutoSave(state: BuilderState) {
+  if (state.exportMode === null) return;
   const vscode = getVsCodeApi();
   if (!vscode) {
     // Browser fallback: save to localStorage
@@ -269,7 +270,7 @@ function applySnapshot(set: (partial: Partial<BuilderState>) => void, snapshot: 
     activePageId: snapshot.data.viewSettings?.activePageId ?? snapshot.data.pages[0]?.id ?? "",
     leftSidebarCollapsed: snapshot.data.viewSettings?.leftSidebarCollapsed ?? false,
     rightPanelCollapsed: snapshot.data.viewSettings?.rightPanelCollapsed ?? false,
-    exportMode: snapshot.metadata.exportMode ?? "live",
+    exportMode: snapshot.metadata.exportMode === undefined ? "live" : snapshot.metadata.exportMode,
     past: [],
     future: [],
   });
