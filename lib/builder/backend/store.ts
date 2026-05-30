@@ -326,4 +326,9 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   selectNode: (id) => set({ selectedNodeId: id }),
 
   setNodes: (nodes) => set({ nodes }),
+
+  sync: () => {
+    syncToHost(get());
+    syncLayoutToHost(get());
+  },
 }));

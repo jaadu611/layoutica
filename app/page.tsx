@@ -116,6 +116,9 @@ export default function BuilderPage() {
         setExportMode(null);
       } else if (message.type === "nextAppInitStatus") {
         setInitStatus(message.payload.status);
+        if (message.payload.status === "success") {
+          useBackendStore.getState().sync();
+        }
         if (message.payload.error) {
           console.error("[Layoutica Webview] Initialization error details:", message.payload.error);
           setInitError(message.payload.error);
@@ -148,6 +151,7 @@ export default function BuilderPage() {
   // Sync workspace files live if exportMode === 'live'
   useEffect(() => {
     if (!hydrationChecked) return;
+    if (initStatus === "initializing") return;
     if (exportMode === "live") {
       const vscode = getVsCodeApi();
       if (vscode) {
@@ -158,12 +162,13 @@ export default function BuilderPage() {
         });
       }
     }
-  }, [pages, components, designTokens, exportMode, hydrationChecked]);
+  }, [pages, components, designTokens, exportMode, hydrationChecked, initStatus]);
 
   // Auto-save UI layout state to ui_layout.json
   useEffect(() => {
     if (!hydrationChecked) return;
     if (exportMode === null) return;
+    if (initStatus === "initializing") return;
     const vscode = getVsCodeApi();
     if (vscode && (pages.length > 0 || components.length > 0)) {
       const snapshot: UILayoutSnapshot = {
@@ -192,7 +197,7 @@ export default function BuilderPage() {
         },
       });
     }
-  }, [pages, components, designTokens, exportMode, activePageId, leftSidebarCollapsed, rightPanelCollapsed, hydrationChecked]);
+  }, [pages, components, designTokens, exportMode, activePageId, leftSidebarCollapsed, rightPanelCollapsed, hydrationChecked, initStatus]);
 
   // Use a ref for the sidebar to avoid unnecessary re-renders, but we'll use state-driven styles for the animation
   // Actually, we'll just use the store values directly in the render logic with CSS transitions.

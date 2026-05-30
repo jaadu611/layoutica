@@ -646,6 +646,8 @@ export function activate(context) {
             case "syncLayoutState": {
               const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
               if (!workspaceFolder) return;
+              const packageJsonPath = path.join(workspaceFolder.uri.fsPath, "package.json");
+              if (isInitializingNextApp || !fs.existsSync(packageJsonPath)) return;
               const layoutJsonPath = activeWorkspaceJsonPath
                 ? path.join(path.dirname(activeWorkspaceJsonPath), "layout.json")
                 : path.join(workspaceFolder.uri.fsPath, ".layoutica", "layout.json");
@@ -662,6 +664,8 @@ export function activate(context) {
             case "saveUILayout": {
               const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
               if (!workspaceFolder) return;
+              const packageJsonPath = path.join(workspaceFolder.uri.fsPath, "package.json");
+              if (isInitializingNextApp || !fs.existsSync(packageJsonPath)) return;
               const uiLayoutJsonPath = activeWorkspaceJsonPath
                 ? path.join(path.dirname(activeWorkspaceJsonPath), "ui_layout.json")
                 : path.join(workspaceFolder.uri.fsPath, ".layoutica", "ui_layout.json");
@@ -720,6 +724,8 @@ export function activate(context) {
                 console.warn("[Layoutica Host] Cancelled syncBackendState: No open workspace folders");
                 return;
               }
+              const packageJsonPath = path.join(workspaceFolder.uri.fsPath, "package.json");
+              if (isInitializingNextApp || !fs.existsSync(packageJsonPath)) return;
               const nodes = message.payload.nodes || [];
               syncBackendFiles(workspaceFolder.uri.fsPath, nodes);
               break;
