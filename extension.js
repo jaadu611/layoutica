@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { fileURLToPath } from "url";
 
 import { exec } from "child_process";
@@ -334,6 +335,17 @@ export function activate(context) {
 
                     const cmd = 'npx -y create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm';
                     
+                    const layouticaPath = path.join(workspaceFolder.uri.fsPath, ".layoutica");
+                    let layouticaBackupPath = null;
+                    if (fs.existsSync(layouticaPath)) {
+                      layouticaBackupPath = path.join(os.tmpdir(), `layoutica-backup-${Date.now()}`);
+                      try {
+                        fs.renameSync(layouticaPath, layouticaBackupPath);
+                      } catch (err) {
+                        console.error("[Layoutica Host] Failed to backup .layoutica:", err);
+                      }
+                    }
+
                     const execPromise = new Promise((resolve, reject) => {
                       exec(
                         cmd,
@@ -398,6 +410,16 @@ export function activate(context) {
                         payload: { status: "error", error: err.message || String(err) },
                       });
                     } finally {
+                      if (layouticaBackupPath && fs.existsSync(layouticaBackupPath)) {
+                        try {
+                          if (fs.existsSync(layouticaPath)) {
+                            fs.rmSync(layouticaPath, { recursive: true, force: true });
+                          }
+                          fs.renameSync(layouticaBackupPath, layouticaPath);
+                        } catch (err) {
+                          console.error("[Layoutica Host] Failed to restore .layoutica:", err);
+                        }
+                      }
                       isInitializingNextApp = false;
                     }
                   }
