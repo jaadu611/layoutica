@@ -163,6 +163,7 @@ export default function BuilderPage() {
   // Auto-save UI layout state to ui_layout.json
   useEffect(() => {
     if (!hydrationChecked) return;
+    if (exportMode === null) return;
     const vscode = getVsCodeApi();
     if (vscode && (pages.length > 0 || components.length > 0)) {
       const snapshot: UILayoutSnapshot = {
