@@ -2607,7 +2607,6 @@ export default function Canvas() {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-1.5 mr-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
             <span className="text-[11px] text-white/50 font-medium">
               {multiCount} selected
             </span>

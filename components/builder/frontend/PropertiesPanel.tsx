@@ -944,6 +944,17 @@ export default function PropertiesPanel() {
           "pre",
           "label",
           "legend",
+          "button",
+          "link",
+          "checkbox",
+          "radio",
+          "alert",
+          "details",
+          "time",
+          "mark",
+          "kbd",
+          "navbar",
+          "footer",
         ].includes(el.type) && (
           <Section title="Content">
             <Textarea
@@ -956,13 +967,6 @@ export default function PropertiesPanel() {
         )}
         {el.type === "link" && (
           <Section title="Link">
-            <Field label="Label">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="Click here"
-              />
-            </Field>
             <Field label="URL">
               <Input
                 value={el.href || ""}
@@ -984,13 +988,6 @@ export default function PropertiesPanel() {
         )}
         {el.type === "button" && (
           <Section title="Button">
-            <Field label="Label">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="Click me"
-              />
-            </Field>
             <Field label="URL">
               <Input
                 value={el.href || ""}
@@ -1012,13 +1009,6 @@ export default function PropertiesPanel() {
         )}
         {el.type === "navbar" && (
           <Section title="Navbar">
-            <Field label="Brand Name">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="Brand"
-              />
-            </Field>
             <div>
               <Label>Sticky Preset</Label>
               <button
@@ -1075,18 +1065,7 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-        {el.type === "footer" && (
-          <Section title="Footer">
-            <Field label="Content">
-              <Textarea
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="© 2025 My Site."
-                rows={2}
-              />
-            </Field>
-          </Section>
-        )}
+
         {(el.type === "list" || el.type === "orderedList") && (
           <Section title={el.type === "orderedList" ? "Ordered List" : "List"}>
             <Field label="Items (one per line)">
@@ -1192,13 +1171,6 @@ export default function PropertiesPanel() {
         )}
         {el.type === "checkbox" && (
           <Section title="Checkbox">
-            <Field label="Label">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="I agree to the terms"
-              />
-            </Field>
             <Field label="Field Name">
               <Input
                 value={el.fieldName || ""}
@@ -1219,13 +1191,6 @@ export default function PropertiesPanel() {
         )}
         {el.type === "radio" && (
           <Section title="Radio">
-            <Field label="Label">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="Option"
-              />
-            </Field>
             <Field label="Group Name">
               <Input
                 value={el.fieldName || ""}
@@ -1237,13 +1202,6 @@ export default function PropertiesPanel() {
         )}
         {el.type === "time" && (
           <Section title="Time">
-            <Field label="Display Text">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="January 1, 2025"
-              />
-            </Field>
             <Field label="datetime attr">
               <Input
                 value={el.dateTime || ""}
@@ -1253,28 +1211,7 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-        {el.type === "mark" && (
-          <Section title="Highlight">
-            <Field label="Text">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="highlighted text"
-              />
-            </Field>
-          </Section>
-        )}
-        {el.type === "kbd" && (
-          <Section title="Keyboard">
-            <Field label="Keys">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="⌘K"
-              />
-            </Field>
-          </Section>
-        )}
+
         {el.type === "progress" && (
           <Section title="Progress">
             <Row>
@@ -1321,13 +1258,6 @@ export default function PropertiesPanel() {
         )}
         {el.type === "details" && (
           <Section title="Details">
-            <Field label="Summary">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="Click to expand"
-              />
-            </Field>
             <div className="flex items-center justify-between px-1">
               <Label>Open by default</Label>
               <button
@@ -1369,13 +1299,6 @@ export default function PropertiesPanel() {
         )}
         {el.type === "alert" && (
           <Section title="Alert">
-            <Field label="Message">
-              <Input
-                value={el.content || ""}
-                onChange={(v) => update("content", v)}
-                placeholder="Alert message…"
-              />
-            </Field>
             <Field label="Variant">
               <Select
                 value={el.alertVariant || "info"}
@@ -1695,35 +1618,6 @@ export default function PropertiesPanel() {
             </Field>
           </Section>
         )}
-
-        <Section title="Breakpoint Visibility" collapsible defaultOpen={true}>
-          <div className="flex gap-1.5 mt-1 mb-1">
-            <ToggleButton
-              active={el.responsiveVisibility?.desktop ?? true}
-              onClick={() => updateVisibility("desktop", !(el.responsiveVisibility?.desktop ?? true))}
-              title="Visible on Desktop"
-            >
-              <Monitor size={12} className="mr-1" />
-              <span className="text-[10px] font-semibold">Desktop</span>
-            </ToggleButton>
-            <ToggleButton
-              active={el.responsiveVisibility?.tablet ?? true}
-              onClick={() => updateVisibility("tablet", !(el.responsiveVisibility?.tablet ?? true))}
-              title="Visible on Tablet"
-            >
-              <Tablet size={12} className="mr-1" />
-              <span className="text-[10px] font-semibold">Tablet</span>
-            </ToggleButton>
-            <ToggleButton
-              active={el.responsiveVisibility?.mobile ?? true}
-              onClick={() => updateVisibility("mobile", !(el.responsiveVisibility?.mobile ?? true))}
-              title="Visible on Mobile"
-            >
-              <Smartphone size={12} className="mr-1" />
-              <span className="text-[10px] font-semibold">Mobile</span>
-            </ToggleButton>
-          </div>
-        </Section>
 
         <Section title="Size & Space">
           <Row>

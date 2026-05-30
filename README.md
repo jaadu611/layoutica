@@ -4,28 +4,26 @@ A professional Visual Website Builder for modern web development. Build layouts 
 
 ![Layoutica Banner](https://images.unsplash.com/photo-1558655146-d09347e92766?q=80&w=2000&auto=format&fit=crop)
 
-## Core Features
-
-### Visual Design Canvas
+### Visual Design Canvas (Frontend)
 - Figma-inspired Editor: A high-performance canvas to design layouts with precision.
 - Precision Styling: Control over typography, spacing, layouts (Flexbox & Grid), glassmorphism, and gradients.
-- Responsive Design: Design once and ensure compatibility across multiple device breakpoints.
 - Hover & Active States: Craft interactive elements with dedicated state-based styling.
-
-### Element & Component System
 - Rich Element Library: Over 40+ semantic elements including sections, navbars, cards, media, and interactive buttons.
 - Reusable Components: Save any designed element as a custom component and reuse it across multiple pages.
-- Layer Management: Reorder, duplicate, and organize elements in a structured tree.
+- Textarea Editing: Restored multi-line textarea editing for all text-bearing elements.
 
-### Multi-Page Support
-- Dynamic Routing: Add, rename, and manage multiple pages with unique SLUGs.
-- Consistent Design: Share styles and components across the entire project.
+### Node-based Architecture Mapper (Backend)
+- File & Module Mapping: Design project module structures visually with nodes representing files/folders.
+- Imports/Exports Visualization: Visual connection lines with mid-point hover disconnection actions and direction indicators.
+- Orphan File Detection: Warns and visualizes orphan modules lacking import/export connections.
+- Color Tagging: Customize node border colors using a native popover color picker.
+- Folder BADGE Count: Folder nodes show exact file counts instead of generic placeholders.
 
-### Developer Tools
-- Clean Code Export: Generates industry-standard React components with descriptive Tailwind CSS classes.
-- Design Tokens: Manage global color palettes and typography scales to maintain brand consistency.
-- Undo/Redo History: 50-step robust history protection.
-- Save/Load System: Export projects as portable JSON files or save locally.
+### Developer Experience & VS Code Integration
+- Workspace Sync: Files are written directly to your VS Code workspace in real-time as you design.
+- Dual-Canvas Persistence: Generates clean `workspace.json` (for backend engines) and saves full UI states to `layout.json` (backend) and `ui_layout.json` (frontend).
+- Zero-Config Hydration: Instantly resumes and hydrates project states from JSON files on VS Code reload, bypassing configuration prompts.
+- Undo/Redo & Shortcuts: Robust 50-step history and canvas duplicate shortcuts.
 
 ## Tech Stack
 

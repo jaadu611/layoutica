@@ -8,6 +8,35 @@ import { exec } from "child_process";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const nodeFilePaths = new Map();
+let activeWorkspaceJsonPath = null;
+
+function getNodePath(workspacePath, node) {
+  let filename = node.name;
+  const extSuffix = `.${node.extension}`;
+  if (!filename.endsWith(extSuffix)) {
+    filename = filename + extSuffix;
+  }
+  const nodeDir = node.path ? path.resolve(workspacePath, node.path) : workspacePath;
+  return path.join(nodeDir, filename);
+}
+
+function removeEmptyDirs(dirPath, workspacePath) {
+  if (dirPath === workspacePath || !dirPath.startsWith(workspacePath)) return;
+  try {
+    if (fs.existsSync(dirPath)) {
+      const children = fs.readdirSync(dirPath);
+      if (children.length === 0) {
+        fs.rmdirSync(dirPath);
+        console.log(`[Layoutica Host] Removed empty directory: ${dirPath}`);
+        removeEmptyDirs(path.dirname(dirPath), workspacePath);
+      }
+    }
+  } catch (e) {
+    console.error("[Layoutica Host] Failed to remove empty dir:", dirPath, e);
+  }
+}
+
 function writeFiles(workspacePath, files) {
   for (const [relativePath, content] of Object.entries(files)) {
     const filePath = path.join(workspacePath, relativePath);
@@ -68,6 +97,141 @@ function pruneDeletedPages(workspacePath, files) {
   scan(appPath);
 }
 
+function syncBackendFiles(workspacePath, nodes) {
+  const workspaceJsonPath = activeWorkspaceJsonPath || path.join(workspacePath, "workspace.json");
+  const targetWorkspaceDir = path.dirname(workspaceJsonPath);
+
+  function getFormattedPath(node) {
+    const ext = node.extension || "ts";
+    let filename = node.name;
+    if (!filename.endsWith(`.${ext}`)) {
+      filename = `${filename}.${ext}`;
+    }
+    const p = node.path ? `${node.path}/${filename}` : filename;
+    return '/' + p.replace(/\\/g, '/').replace(/^\/+/, '');
+  }
+
+  function writeFileWithDescription(filePath, description, imports, exports) {
+    const dirPath = path.dirname(filePath);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    
+    let headerComments = `// Description: ${description || ""}\n`;
+    if (imports && imports.length > 0) {
+      headerComments += `// Imports: ${imports.join(", ")}\n`;
+    }
+    if (exports && exports.length > 0) {
+      headerComments += `// Exports: ${exports.join(", ")}\n`;
+    }
+    
+    let content = "";
+    if (fs.existsSync(filePath)) {
+      const currentContent = fs.readFileSync(filePath, "utf8");
+      const lines = currentContent.split("\n");
+      let dataStartIndex = 0;
+      while (
+        dataStartIndex < lines.length && 
+        (lines[dataStartIndex].startsWith("// Description:") || 
+         lines[dataStartIndex].startsWith("// Imports:") || 
+         lines[dataStartIndex].startsWith("// Exports:"))
+      ) {
+        dataStartIndex++;
+      }
+      const dataContent = lines.slice(dataStartIndex).join("\n").replace(/^\n+/, "");
+      content = headerComments + "\n" + dataContent;
+    } else {
+      content = headerComments + "\n";
+    }
+    fs.writeFileSync(filePath, content, "utf8");
+  }
+
+  // 1. Delete physical files for nodes that were deleted on canvas
+  const incomingIds = new Set(nodes.map(n => n.id));
+  for (const [id, oldPath] of nodeFilePaths.entries()) {
+    if (!incomingIds.has(id)) {
+      if (fs.existsSync(oldPath)) {
+        try {
+          fs.unlinkSync(oldPath);
+          console.log(`[Layoutica Host] Deleted backend file: ${oldPath}`);
+          removeEmptyDirs(path.dirname(oldPath), targetWorkspaceDir);
+        } catch (err) {
+          console.error(`[Layoutica Host] Failed to delete file: ${oldPath}`, err);
+        }
+      }
+      nodeFilePaths.delete(id);
+    }
+  }
+
+  // 2. Process active nodes (moves and writes)
+  const outputNodes = [];
+
+  for (const node of nodes) {
+    const newPath = getNodePath(targetWorkspaceDir, node);
+    const oldPath = nodeFilePaths.get(node.id);
+
+    if (oldPath && oldPath !== newPath) {
+      if (fs.existsSync(oldPath)) {
+        try {
+          const newDir = path.dirname(newPath);
+          if (!fs.existsSync(newDir)) {
+            fs.mkdirSync(newDir, { recursive: true });
+          }
+          fs.renameSync(oldPath, newPath);
+          console.log(`[Layoutica Host] Moved file from ${oldPath} to ${newPath}`);
+          removeEmptyDirs(path.dirname(oldPath), targetWorkspaceDir);
+        } catch (err) {
+          console.error(`[Layoutica Host] Failed to move file: ${oldPath} -> ${newPath}`, err);
+        }
+      }
+    }
+
+    nodeFilePaths.set(node.id, newPath);
+
+    let formattedImports = [];
+    let formattedExports = [];
+    if (node.connections) {
+      node.connections.forEach(conn => {
+        if (conn.type === "import") {
+          const sourceNode = nodes.find(n => n.id === conn.sourceId);
+          if (sourceNode) formattedImports.push(getFormattedPath(sourceNode));
+        } else if (conn.type === "export") {
+          const targetNode = nodes.find(n => n.id === conn.targetId);
+          if (targetNode) formattedExports.push(getFormattedPath(targetNode));
+        }
+      });
+    } else {
+      if (node.imports) formattedImports = node.imports;
+      if (node.exports) formattedExports = node.exports;
+    }
+
+    try {
+      writeFileWithDescription(newPath, node.description, formattedImports, formattedExports);
+    } catch (err) {
+      console.error(`[Layoutica Host] Failed to write backend file: ${newPath}`, err);
+    }
+
+    const { id, x, y, isExpanded, connections, ...rest } = node;
+    const outNode = { ...rest };
+    if (formattedImports.length > 0) outNode.imports = formattedImports;
+    if (formattedExports.length > 0) outNode.exports = formattedExports;
+    
+    // We retain connections if they exist so the canvas can render them when reloaded
+    if (connections) outNode.connections = connections;
+    outNode.id = id;
+
+    outputNodes.push(outNode);
+  }
+
+  // 3. Write workspace.json
+  try {
+    fs.writeFileSync(workspaceJsonPath, JSON.stringify(outputNodes, null, 2), "utf8");
+    console.log(`[Layoutica Host] Synced workspace.json successfully`);
+  } catch (err) {
+    console.error(`[Layoutica Host] Failed to write workspace.json`, err);
+  }
+}
+
 let isInitializingNextApp = false;
 
 export function activate(context) {
@@ -124,7 +288,7 @@ export function activate(context) {
 
       // Handle messages from Webview
       panel.webview.onDidReceiveMessage(
-        (message) => {
+        async (message) => {
           switch (message.type) {
             case "writeWorkspaceFiles": {
               const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -279,6 +443,23 @@ export function activate(context) {
               break;
             }
 
+            case "openFile": {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+              if (workspaceFolder && message.payload.path && message.payload.name && message.payload.extension) {
+                const targetPath = path.join(
+                  workspaceFolder.uri.fsPath,
+                  message.payload.path,
+                  `${message.payload.name}.${message.payload.extension}`
+                );
+                if (fs.existsSync(targetPath)) {
+                  vscode.workspace.openTextDocument(vscode.Uri.file(targetPath)).then((doc) => {
+                    vscode.window.showTextDocument(doc, { preserveFocus: true, preview: false });
+                  });
+                }
+              }
+              break;
+            }
+
             case "loadProject": {
               const options = {
                 canSelectMany: false,
@@ -353,6 +534,158 @@ export function activate(context) {
                     `Failed to export code: ${err.message || String(err)}`
                   );
                 });
+              break;
+            }
+
+            case "getBackendState": {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+              if (!workspaceFolder) {
+                console.warn("[Layoutica Host] Cancelled getBackendState: No open workspace folders");
+                return;
+              }
+
+              let workspaceJsonPath = null;
+              try {
+                const files = await vscode.workspace.findFiles("**/workspace.json", "**/node_modules/**", 1);
+                if (files && files.length > 0) {
+                  workspaceJsonPath = files[0].fsPath;
+                }
+              } catch (err) {
+                console.error("[Layoutica Host] Error searching for workspace.json:", err);
+              }
+
+              if (!workspaceJsonPath) {
+                workspaceJsonPath = path.join(workspaceFolder.uri.fsPath, "workspace.json");
+              }
+
+              activeWorkspaceJsonPath = workspaceJsonPath;
+              const targetWorkspaceDir = path.dirname(workspaceJsonPath);
+              const layoutJsonPath = path.join(targetWorkspaceDir, "layout.json");
+
+              let nodes = [];
+              let pinnedNodes = [];
+              let connections = [];
+              let activeGhostNodes = [];
+
+              if (fs.existsSync(layoutJsonPath)) {
+                try {
+                  const data = fs.readFileSync(layoutJsonPath, "utf8");
+                  const parsed = JSON.parse(data);
+                  nodeFilePaths.clear();
+                  nodes = (parsed.nodes || []).map((n) => {
+                    nodeFilePaths.set(n.id, getNodePath(targetWorkspaceDir, n));
+                    return n;
+                  });
+                  pinnedNodes = parsed.pinnedNodes || [];
+                  connections = parsed.connections || [];
+                  activeGhostNodes = parsed.activeGhostNodes || [];
+                } catch (err) {
+                  console.error("[Layoutica Host] Failed to read layout.json:", err);
+                }
+              } else if (fs.existsSync(workspaceJsonPath)) {
+                try {
+                  const data = fs.readFileSync(workspaceJsonPath, "utf8");
+                  const parsed = JSON.parse(data);
+                  nodeFilePaths.clear();
+                  nodes = parsed.map((n, i) => {
+                    const id = n.id || `node-${Math.random().toString(36).substr(2, 9)}`;
+                    const node = {
+                      ...n,
+                      id,
+                      x: n.x ?? (10 + (i * 20)),
+                      y: n.y ?? (10 + (i * 20)),
+                      isExpanded: n.isExpanded ?? false
+                    };
+                    nodeFilePaths.set(id, getNodePath(targetWorkspaceDir, node));
+                    return node;
+                  });
+                } catch (err) {
+                  console.error("[Layoutica Host] Failed to read workspace.json:", err);
+                }
+              }
+
+              panel.webview.postMessage({
+                type: "getBackendStateResponse",
+                payload: { nodes, pinnedNodes, connections, activeGhostNodes }
+              });
+              break;
+            }
+
+            case "syncLayoutState": {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+              if (!workspaceFolder) return;
+              const layoutJsonPath = activeWorkspaceJsonPath
+                ? path.join(path.dirname(activeWorkspaceJsonPath), "layout.json")
+                : path.join(workspaceFolder.uri.fsPath, "layout.json");
+              try {
+                fs.writeFileSync(layoutJsonPath, JSON.stringify(message.payload, null, 2), "utf8");
+              } catch (err) {
+                console.error("[Layoutica Host] Failed to write layout.json:", err);
+              }
+              break;
+            }
+
+            case "saveUILayout": {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+              if (!workspaceFolder) return;
+              const uiLayoutJsonPath = activeWorkspaceJsonPath
+                ? path.join(path.dirname(activeWorkspaceJsonPath), "ui_layout.json")
+                : path.join(workspaceFolder.uri.fsPath, "ui_layout.json");
+              try {
+                fs.writeFileSync(uiLayoutJsonPath, message.payload.json, "utf8");
+              } catch (err) {
+                console.error("[Layoutica Host] Failed to write ui_layout.json:", err);
+              }
+              break;
+            }
+
+            case "loadUILayout": {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+              if (!workspaceFolder) {
+                panel.webview.postMessage({
+                  type: "loadUILayoutResponse",
+                  payload: { error: "No open workspace" }
+                });
+                return;
+              }
+              let workspaceJsonPath = null;
+              try {
+                const files = await vscode.workspace.findFiles("**/workspace.json", "**/node_modules/**", 1);
+                if (files && files.length > 0) {
+                  workspaceJsonPath = files[0].fsPath;
+                }
+              } catch (err) {
+                console.error("[Layoutica Host] Error searching for workspace.json:", err);
+              }
+              const targetDir = workspaceJsonPath ? path.dirname(workspaceJsonPath) : workspaceFolder.uri.fsPath;
+              const uiLayoutJsonPath = path.join(targetDir, "ui_layout.json");
+              if (fs.existsSync(uiLayoutJsonPath)) {
+                try {
+                  const content = fs.readFileSync(uiLayoutJsonPath, "utf8");
+                  panel.webview.postMessage({
+                    type: "loadUILayoutResponse",
+                    payload: { json: content }
+                  });
+                  return;
+                } catch (err) {
+                  console.error("[Layoutica Host] Failed to read ui_layout.json:", err);
+                }
+              }
+              panel.webview.postMessage({
+                type: "loadUILayoutResponse",
+                payload: { json: null }
+              });
+              break;
+            }
+
+            case "syncBackendState": {
+              const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+              if (!workspaceFolder) {
+                console.warn("[Layoutica Host] Cancelled syncBackendState: No open workspace folders");
+                return;
+              }
+              const nodes = message.payload.nodes || [];
+              syncBackendFiles(workspaceFolder.uri.fsPath, nodes);
               break;
             }
           }

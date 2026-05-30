@@ -214,10 +214,20 @@ export interface CanvasElement {
   };
 }
 
+/** Page role hints for the AI code generator.
+ *  - module:    default, regular file
+ *  - page:      route entry point (page.tsx)
+ *  - layout:    wraps child routes (layout.tsx / +layout.svelte etc.)
+ *  - shared:    shared across routes → component
+ *  - provider:  context/state wrapper → wraps the app root
+ */
+export type PageRole = "module" | "page" | "layout" | "shared" | "provider";
+
 export interface Page {
   id: string;
   name: string;
   slug: string;
+  role: PageRole; // default: "page"
   elements: CanvasElement[];
 }
 
@@ -237,6 +247,30 @@ export type SelectedState = "focus" | "hover" | "active" | "default";
 
 export type CanvasBreakpoint = string;
 export type CanvasBackground = "white" | "dark" | "checker";
+
+/**
+ * Snapshot of the full frontend-builder state that gets auto-saved
+ * as ui_layout.json (or via localStorage as fallback).
+ */
+export interface UILayoutSnapshot {
+  metadata: {
+    name: string;
+    version: string;
+    lastUpdated: string;
+    pageCount: number;
+    exportMode: "live" | "export" | null;
+  };
+  data: {
+    pages: Page[];
+    savedComponents: SavedComponent[];
+    designTokens: DesignTokens;
+    viewSettings: {
+      activePageId: string;
+      leftSidebarCollapsed: boolean;
+      rightPanelCollapsed: boolean;
+    };
+  };
+}
 
 export interface BuilderState {
   pages: Page[];
@@ -264,10 +298,11 @@ export interface BuilderState {
   exportMode: "live" | "export" | null;
   setExportMode: (mode: "live" | "export" | null) => void;
 
-  addPage: (name: string) => void;
+  addPage: (name: string, role?: PageRole) => void;
   deletePage: (id: string) => void;
   setActivePage: (id: string) => void;
   renamePage: (id: string, name: string) => void;
+  setPageRole: (id: string, role: PageRole) => void;
   addElement: (
     element: Omit<CanvasElement, "id">,
     parentId?: string,
