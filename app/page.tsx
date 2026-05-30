@@ -136,6 +136,9 @@ export default function BuilderPage() {
         if (message.payload.activeGhostNodes?.length) {
           useBackendStore.setState({ activeGhostNodes: message.payload.activeGhostNodes });
         }
+      } else if (message.type === "fileSavedSync") {
+        const { nodeId, description, imports, exports } = message.payload;
+        useBackendStore.getState().syncFileChanges(nodeId, description, imports, exports);
       }
     };
     window.addEventListener("message", handleMessage);

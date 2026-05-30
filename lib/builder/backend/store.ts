@@ -88,6 +88,53 @@ export const useBackendStore = create<BackendState>((set, get) => ({
 
   openAntennaMenu: (id) => set({ antennaMenuNodeId: id }),
 
+  syncFileChanges: (nodeId, description, imports, exports) => {
+    const { nodes, connections, past } = get();
+    const newNodes = nodes.map(n => n.id === nodeId ? { ...n, description } : n);
+    const getNodeFormattedPath = (n: BackendFileNode) => {
+      const ext = n.extension || "ts";
+      let filename = n.name;
+      if (!filename.endsWith(`.${ext}`)) filename = `${filename}.${ext}`;
+      const p = n.path ? `${n.path}/${filename}` : filename;
+      return '/' + p.replace(/\\/g, '/').replace(/^\/+/, '');
+    };
+    const otherConns = connections.filter(c => c.sourceId !== nodeId && c.targetId !== nodeId);
+    const newConnections = [...otherConns];
+    imports.forEach(impPath => {
+      const importNode = nodes.find(n => getNodeFormattedPath(n) === impPath);
+      if (importNode) {
+        newConnections.push({
+          id: `conn-${Math.random().toString(36).substring(2, 11)}`,
+          sourceId: importNode.id,
+          targetId: nodeId,
+          type: "import"
+        });
+      }
+    });
+    exports.forEach(expPath => {
+      const exportNode = nodes.find(n => getNodeFormattedPath(n) === expPath);
+      if (exportNode) {
+        newConnections.push({
+          id: `conn-${Math.random().toString(36).substring(2, 11)}`,
+          sourceId: nodeId,
+          targetId: exportNode.id,
+          type: "export"
+        });
+      }
+    });
+    const newPast = [...past, nodes].slice(-MAX_HISTORY);
+    set({
+      nodes: newNodes,
+      connections: newConnections,
+      past: newPast,
+      future: [],
+      undoable: true,
+      redoable: false
+    });
+    syncToHost(get());
+    syncLayoutToHost(get());
+  },
+
   undo: () => {
     const { past, nodes, future } = get();
     if (past.length === 0) return;

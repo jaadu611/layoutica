@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const nodeFilePaths = new Map();
 let activeWorkspaceJsonPath = null;
+let activePanel = null;
 
 function getNodePath(workspacePath, node) {
   let filename = node.name;
@@ -98,8 +99,8 @@ function pruneDeletedPages(workspacePath, files) {
 }
 
 function syncBackendFiles(workspacePath, nodes) {
-  const workspaceJsonPath = activeWorkspaceJsonPath || path.join(workspacePath, "workspace.json");
-  const targetWorkspaceDir = path.dirname(workspaceJsonPath);
+  const workspaceJsonPath = activeWorkspaceJsonPath || path.join(workspacePath, ".layoutica", "workspace.json");
+  const targetWorkspaceDir = path.dirname(path.dirname(workspaceJsonPath));
 
   function getFormattedPath(node) {
     const ext = node.extension || "ts";
@@ -225,6 +226,10 @@ function syncBackendFiles(workspacePath, nodes) {
 
   // 3. Write workspace.json
   try {
+    const dir = path.dirname(workspaceJsonPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.writeFileSync(workspaceJsonPath, JSON.stringify(outputNodes, null, 2), "utf8");
     console.log(`[Layoutica Host] Synced workspace.json successfully`);
   } catch (err) {
@@ -260,6 +265,11 @@ export function activate(context) {
           ],
         }
       );
+
+      activePanel = panel;
+      panel.onDidDispose(() => {
+        if (activePanel === panel) activePanel = null;
+      });
 
       const distPath = path.join(__dirname, "dist");
       const htmlPath = path.join(distPath, "index.html");
@@ -546,7 +556,7 @@ export function activate(context) {
 
               let workspaceJsonPath = null;
               try {
-                const files = await vscode.workspace.findFiles("**/workspace.json", "**/node_modules/**", 1);
+                const files = await vscode.workspace.findFiles("**/.layoutica/workspace.json", "**/node_modules/**", 1);
                 if (files && files.length > 0) {
                   workspaceJsonPath = files[0].fsPath;
                 }
@@ -555,12 +565,12 @@ export function activate(context) {
               }
 
               if (!workspaceJsonPath) {
-                workspaceJsonPath = path.join(workspaceFolder.uri.fsPath, "workspace.json");
+                workspaceJsonPath = path.join(workspaceFolder.uri.fsPath, ".layoutica", "workspace.json");
               }
 
               activeWorkspaceJsonPath = workspaceJsonPath;
-              const targetWorkspaceDir = path.dirname(workspaceJsonPath);
-              const layoutJsonPath = path.join(targetWorkspaceDir, "layout.json");
+              const targetWorkspaceDir = path.dirname(path.dirname(workspaceJsonPath));
+              const layoutJsonPath = path.join(path.dirname(workspaceJsonPath), "layout.json");
 
               let nodes = [];
               let pinnedNodes = [];
@@ -616,8 +626,10 @@ export function activate(context) {
               if (!workspaceFolder) return;
               const layoutJsonPath = activeWorkspaceJsonPath
                 ? path.join(path.dirname(activeWorkspaceJsonPath), "layout.json")
-                : path.join(workspaceFolder.uri.fsPath, "layout.json");
+                : path.join(workspaceFolder.uri.fsPath, ".layoutica", "layout.json");
               try {
+                const dir = path.dirname(layoutJsonPath);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                 fs.writeFileSync(layoutJsonPath, JSON.stringify(message.payload, null, 2), "utf8");
               } catch (err) {
                 console.error("[Layoutica Host] Failed to write layout.json:", err);
@@ -630,8 +642,10 @@ export function activate(context) {
               if (!workspaceFolder) return;
               const uiLayoutJsonPath = activeWorkspaceJsonPath
                 ? path.join(path.dirname(activeWorkspaceJsonPath), "ui_layout.json")
-                : path.join(workspaceFolder.uri.fsPath, "ui_layout.json");
+                : path.join(workspaceFolder.uri.fsPath, ".layoutica", "ui_layout.json");
               try {
+                const dir = path.dirname(uiLayoutJsonPath);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                 fs.writeFileSync(uiLayoutJsonPath, message.payload.json, "utf8");
               } catch (err) {
                 console.error("[Layoutica Host] Failed to write ui_layout.json:", err);
@@ -650,14 +664,14 @@ export function activate(context) {
               }
               let workspaceJsonPath = null;
               try {
-                const files = await vscode.workspace.findFiles("**/workspace.json", "**/node_modules/**", 1);
+                const files = await vscode.workspace.findFiles("**/.layoutica/workspace.json", "**/node_modules/**", 1);
                 if (files && files.length > 0) {
                   workspaceJsonPath = files[0].fsPath;
                 }
               } catch (err) {
                 console.error("[Layoutica Host] Error searching for workspace.json:", err);
               }
-              const targetDir = workspaceJsonPath ? path.dirname(workspaceJsonPath) : workspaceFolder.uri.fsPath;
+              const targetDir = workspaceJsonPath ? path.dirname(workspaceJsonPath) : path.join(workspaceFolder.uri.fsPath, ".layoutica");
               const uiLayoutJsonPath = path.join(targetDir, "ui_layout.json");
               if (fs.existsSync(uiLayoutJsonPath)) {
                 try {
@@ -694,6 +708,62 @@ export function activate(context) {
         context.subscriptions
       );
     }
+  );
+
+  function parseHeaderComments(content) {
+    const lines = content.split("\n");
+    let description = "";
+    let imports = [];
+    let exports = [];
+
+    for (const line of lines) {
+      if (line.startsWith("// Description:")) {
+        description = line.substring("// Description:".length).trim();
+      } else if (line.startsWith("// Imports:")) {
+        const parts = line.substring("// Imports:".length).trim();
+        if (parts) {
+          imports = parts.split(",").map(p => p.trim()).filter(Boolean);
+        }
+      } else if (line.startsWith("// Exports:")) {
+        const parts = line.substring("// Exports:".length).trim();
+        if (parts) {
+          exports = parts.split(",").map(p => p.trim()).filter(Boolean);
+        }
+      }
+    }
+
+    return { description, imports, exports };
+  }
+
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(async (document) => {
+      const filePath = document.uri.fsPath;
+      let matchedNodeId = null;
+      for (const [id, pathVal] of nodeFilePaths.entries()) {
+        if (path.resolve(pathVal) === path.resolve(filePath)) {
+          matchedNodeId = id;
+          break;
+        }
+      }
+
+      if (matchedNodeId && activePanel) {
+        try {
+          const content = fs.readFileSync(filePath, "utf8");
+          const parsed = parseHeaderComments(content);
+          activePanel.webview.postMessage({
+            type: "fileSavedSync",
+            payload: {
+              nodeId: matchedNodeId,
+              description: parsed.description,
+              imports: parsed.imports,
+              exports: parsed.exports
+            }
+          });
+        } catch (err) {
+          console.error("[Layoutica Host] Error handling save sync:", err);
+        }
+      }
+    })
   );
 
   context.subscriptions.push(openCommand);

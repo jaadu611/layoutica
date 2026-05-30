@@ -48,4 +48,5 @@ export interface BackendState {
   togglePinnedNode: (id: string) => void;
   toggleGhostNode: (id: string) => void;
   openAntennaMenu: (id: string | null) => void;
+  syncFileChanges: (nodeId: string, description: string, imports: string[], exports: string[]) => void;
 }
