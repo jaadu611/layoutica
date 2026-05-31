@@ -72,6 +72,7 @@ import {
   BarChart2,
   AlertCircle,
   CircleUser,
+  ExternalLink,
 } from "lucide-react";
 
 export const defaultElement = (
@@ -1138,7 +1139,7 @@ function ComponentRow({
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ detachedOnly = false }: { detachedOnly?: boolean }) {
   const {
     pages,
     activePageId,
@@ -1156,6 +1157,8 @@ export default function Sidebar() {
     selectElement,
     reorderElement,
     setStylingState,
+    isLayersDetached,
+    setLayersDetached,
   } = useBuilderStore();
 
   const [tab, setTab] = useState<"layers" | "assets" | "pages">("layers");
@@ -1164,6 +1167,21 @@ export default function Sidebar() {
   const [editingName, setEditingName] = useState("");
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const prevLayersDetachedRef = useRef(isLayersDetached);
+
+  useEffect(() => {
+    if (detachedOnly) {
+      setTab("layers");
+    } else {
+      if (isLayersDetached && tab === "layers") {
+        setTab("assets");
+      } else if (!isLayersDetached && prevLayersDetachedRef.current && !detachedOnly) {
+        setTab("layers");
+      }
+    }
+    prevLayersDetachedRef.current = isLayersDetached;
+  }, [detachedOnly, isLayersDetached, tab]);
 
   const [draggingId, setDraggingIdState] = useState<string | null>(null);
   const [dropTargetId, setDropTargetIdState] = useState<string | null>(null);
@@ -1305,85 +1323,103 @@ export default function Sidebar() {
 
   return (
     <div className="w-full flex-1 flex flex-col min-h-0 overflow-hidden select-none">
-      <div className="flex border-b border-panel-border h-11 px-2 shrink-0">
-        {(["layers", "assets", "pages"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 flex items-center justify-center text-[11px] font-medium capitalize cursor-pointer transition-colors relative ${tab === t ? "text-white" : "text-white/40 hover:text-white/70"}`}
-          >
-            {t}
-            {tab === t && (
-              <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-white rounded-t-sm" />
-            )}
-          </button>
-        ))}
-      </div>
+      {!detachedOnly && (
+        <div className="flex border-b border-panel-border h-11 px-2 shrink-0">
+          {(["layers", "assets", "pages"] as const)
+            .filter((t) => !(t === "layers" && isLayersDetached))
+            .map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`flex-1 flex items-center justify-center text-[11px] font-medium capitalize cursor-pointer transition-colors relative ${tab === t ? "text-white" : "text-white/40 hover:text-white/70"}`}
+              >
+                {t}
+                {tab === t && (
+                  <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-white rounded-t-sm" />
+                )}
+              </button>
+            ))}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto w-full min-h-0">
         {tab === "layers" && (
           <DragCtx.Provider value={dragCtx}>
-            <div className="px-2 pt-2 pb-1 border-b border-panel-border shrink-0">
-              <div className="relative">
-                <Search
-                  size={10}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none"
-                />
-                <input
-                  ref={searchRef}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search layers\u2026"
-                  className="w-full text-[11px] bg-app-bg border border-white/8 hover:border-white/15 focus:border-blue-500/50 rounded pl-6 pr-6 py-1 outline-none text-white placeholder-white/20 transition-all"
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
-                  >
-                    <X size={10} />
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="py-1">
-              {!activePage?.elements?.length ? (
-                <div className="px-4 py-8 text-center text-white/25 text-[11px]">
-                  No layers yet.
-                  <br />
-                  Add elements from Assets.
+            {isLayersDetached && !detachedOnly ? null : (
+              <>
+                <div className="px-2 pt-2 pb-1 border-b border-panel-border shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative flex-1">
+                      <Search
+                        size={10}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none"
+                      />
+                      <input
+                        ref={searchRef}
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search layers..."
+                        className="w-full text-[11px] bg-app-bg border border-white/8 hover:border-white/15 focus:border-blue-500/50 rounded pl-6 pr-6 py-1 outline-none text-white placeholder-white/20 transition-all"
+                      />
+                      {search && (
+                        <button
+                          onClick={() => setSearch("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+                        >
+                          <X size={10} />
+                        </button>
+                      )}
+                    </div>
+                    {!detachedOnly && (
+                      <button
+                        onClick={() => setLayersDetached(true)}
+                        className="p-0.5 h-5 w-5 flex items-center justify-center bg-white/4 hover:bg-white/10 rounded text-white/45 hover:text-white transition-colors cursor-pointer shrink-0 border border-white/5"
+                        title="Detach Layers Tree"
+                      >
+                        <ExternalLink size={9} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <>
-                  {activePage.elements.map((el) => (
-                    <LayerRow
-                      key={el.id}
-                      el={el}
-                      depth={0}
-                      onDrop={handleDrop}
-                      onDragEnd={handleDragEnd}
-                      searchQuery={search}
-                    />
-                  ))}
-                  {/* FIX: end-of-list drop zone uses pg.elements.length instead of Infinity */}
-                  <div
-                    className="h-3"
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (draggingId && activePage) {
-                        reorderElement(
-                          draggingId,
-                          undefined,
-                          activePage.elements.length,
-                        );
-                        setDragging(null);
-                      }
-                    }}
-                  />
-                </>
-              )}
-            </div>
+                <div className="py-1">
+                  {!activePage?.elements?.length ? (
+                    <div className="px-4 py-8 text-center text-white/25 text-[11px]">
+                      No layers yet.
+                      <br />
+                      Add elements from Assets.
+                    </div>
+                  ) : (
+                    <>
+                      {activePage.elements.map((el) => (
+                        <LayerRow
+                          key={el.id}
+                          el={el}
+                          depth={0}
+                          onDrop={handleDrop}
+                          onDragEnd={handleDragEnd}
+                          searchQuery={search}
+                        />
+                      ))}
+                      <div
+                        className="h-3"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggingId && activePage) {
+                            reorderElement(
+                              draggingId,
+                              undefined,
+                              activePage.elements.length,
+                            );
+                            setDragging(null);
+                          }
+                        }}
+                      />
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </DragCtx.Provider>
         )}
 

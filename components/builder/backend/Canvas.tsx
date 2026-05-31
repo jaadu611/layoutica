@@ -87,6 +87,7 @@ export default function BackendCanvas() {
   const [connectionSearchPos, setConnectionSearchPos] = useState({ x: 0, y: 0 });
 
   const [antennaSearchQuery, setAntennaSearchQuery] = useState("");
+  const [isCheatsheetOpen, setIsCheatsheetOpen] = useState(false);
 
   const [clipboard, setClipboard] = useState<{
     action: 'copy' | 'cut';
@@ -346,6 +347,30 @@ export default function BackendCanvas() {
     };
   }, [isDraggingPan, zoom, pan, connections, addConnection]);
 
+  useEffect(() => {
+    const handleCenterOnNode = (e: Event) => {
+      const { nodeId } = (e as CustomEvent).detail;
+      const node = nodes.find(n => n.id === nodeId);
+      if (node && canvasContainerRef.current) {
+        const container = canvasContainerRef.current;
+        const W = container.clientWidth;
+        const H = container.clientHeight;
+        const nodeWidth = 280;
+        const nodeHeight = node.isExpanded ? 300 : 80;
+        const nextZoom = 1.0; 
+        
+        const targetPanX = W / 2 - (node.x + nodeWidth / 2) * nextZoom;
+        const targetPanY = H / 2 - (node.y + nodeHeight / 2) * nextZoom;
+        
+        setZoom(nextZoom);
+        setPan({ x: targetPanX, y: targetPanY });
+      }
+    };
+
+    window.addEventListener("center-on-node", handleCenterOnNode);
+    return () => window.removeEventListener("center-on-node", handleCenterOnNode);
+  }, [nodes]);
+
   // Handle Drag & Drop of Presets
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -591,11 +616,28 @@ export default function BackendCanvas() {
     return nodes.filter(n => n.name.toLowerCase().includes(globalSearchQuery.toLowerCase()) || n.path.toLowerCase().includes(globalSearchQuery.toLowerCase()));
   }, [nodes, globalSearchQuery, pinnedNodes]);
   
+  const connectedFiles = useMemo(() => {
+    if (!connectionSearchNodeId) return [];
+    return connections
+      .filter(c => c.sourceId === connectionSearchNodeId || c.targetId === connectionSearchNodeId)
+      .map(c => {
+        const otherId = c.sourceId === connectionSearchNodeId ? c.targetId : c.sourceId;
+        const otherNode = nodes.find(n => n.id === otherId);
+        return otherNode ? { node: otherNode, connectionId: c.id } : null;
+      })
+      .filter(Boolean) as { node: BackendFileNode; connectionId: string }[];
+  }, [connections, nodes, connectionSearchNodeId]);
+
   const connectionSearchResults = useMemo(() => {
-    const base = nodes.filter(n => n.id !== connectionSearchNodeId);
+    const connectedIds = new Set(
+      connections
+        .filter(c => c.sourceId === connectionSearchNodeId || c.targetId === connectionSearchNodeId)
+        .map(c => c.sourceId === connectionSearchNodeId ? c.targetId : c.sourceId)
+    );
+    const base = nodes.filter(n => n.id !== connectionSearchNodeId && !connectedIds.has(n.id));
     if (!connectionSearchQuery) return base;
     return base.filter(n => n.name.toLowerCase().includes(connectionSearchQuery.toLowerCase()) || n.path.toLowerCase().includes(connectionSearchQuery.toLowerCase()));
-  }, [nodes, connectionSearchQuery, connectionSearchNodeId]);
+  }, [nodes, connectionSearchQuery, connectionSearchNodeId, connections]);
 
   // Update handleKeyDown to capture Escape, Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+D
   useEffect(() => {
@@ -618,6 +660,11 @@ export default function BackendCanvas() {
         if (antennaMenuNodeId) {
           e.preventDefault();
           openAntennaMenu(null);
+          handled = true;
+        }
+        if (isCheatsheetOpen) {
+          e.preventDefault();
+          setIsCheatsheetOpen(false);
           handled = true;
         }
         if (handled) return;
@@ -706,87 +753,6 @@ export default function BackendCanvas() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0c0c0e]">
-      {/* Top Toolbar / Breadcrumb Layer */}
-      <div className="h-12 border-b border-white/5 flex items-center justify-between px-4 bg-zinc-950/80 z-30 select-none backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => handleBreadcrumbClick(-1)}
-            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/80 transition-colors"
-          >
-            <Home size={12} />
-            <span>root</span>
-          </button>
-          {breadcrumbs.map((crumb, idx) => (
-            <React.Fragment key={idx}>
-              <span className="text-white/20 mx-2">/</span>
-              <button 
-                onClick={() => handleBreadcrumbClick(idx)}
-                className={`text-xs transition-colors ${idx === breadcrumbs.length - 1 ? 'text-white font-medium' : 'text-white/40 hover:text-white/80'}`}
-              >
-                {crumb}
-              </button>
-            </React.Fragment>
-          ))}
-        </div>
-
-        {/* Global Search and Clean Layout controls */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleOrganizeWorkspaceGrid}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-white/60 hover:text-white hover:border-zinc-700 transition-colors text-xs font-medium cursor-pointer"
-            title="Clean Layout (Topological Connection-based Grid Layout)"
-          >
-            <Route size={13} className="text-violet-400" />
-            <span>Clean Layout</span>
-          </button>
-
-          <div className="relative">
-            <button 
-              onClick={() => setIsGlobalSearchOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-white/40 hover:text-white hover:border-zinc-700 transition-colors text-xs"
-            >
-              <Search size={14} />
-              <span>Search workspace...</span>
-              <kbd className="ml-4 font-sans text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-white/30">⌘K</kbd>
-            </button>
-
-            {isGlobalSearchOpen && (
-              <div className="absolute top-10 right-0 w-[320px] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-2">
-                <div className="flex items-center gap-2 px-2 pb-2 border-b border-white/5">
-                  <Search size={14} className="text-white/40" />
-                  <input 
-                    autoFocus
-                    type="text" 
-                    value={globalSearchQuery}
-                    onChange={e => setGlobalSearchQuery(e.target.value)}
-                    placeholder="Find files or folders..."
-                    className="flex-1 bg-transparent text-xs text-white placeholder-white/20 outline-none"
-                  />
-                  <button onClick={() => setIsGlobalSearchOpen(false)} className="text-white/40 hover:text-white">
-                    <X size={14} />
-                  </button>
-                </div>
-                <div className="flex flex-col max-h-[300px] overflow-y-auto">
-                  {globalSearchResults.map(res => (
-                    <button 
-                      key={res.id} 
-                      onClick={() => executeGlobalSearch(res.id)}
-                      className="flex flex-col items-start px-2 py-2 hover:bg-white/5 rounded-lg text-left"
-                    >
-                      <span className="text-xs text-white">{res.name}.{res.extension}</span>
-                      <span className="text-[10px] text-white/40">{res.path || "root"}</span>
-                    </button>
-                  ))}
-                  {globalSearchQuery && globalSearchResults.length === 0 && (
-                    <div className="px-2 py-4 text-center text-xs text-white/40">No results found</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Canvas Area */}
       <div
         ref={canvasContainerRef}
@@ -1142,6 +1108,7 @@ export default function BackendCanvas() {
                     style={{ left: 290, top: 0 }}
                     onClick={e => e.stopPropagation()}
                     onMouseDown={e => e.stopPropagation()}
+                    onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setConnectionSearchNodeId(null); } }}
                   >
                     <div className="flex items-center justify-between px-1">
                       <span className="text-[10px] uppercase font-bold text-white/40">Connect to...</span>
@@ -1156,10 +1123,44 @@ export default function BackendCanvas() {
                         type="text" 
                         value={connectionSearchQuery}
                         onChange={e => setConnectionSearchQuery(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setConnectionSearchNodeId(null); } }}
                         placeholder="Search workspace files..."
                         className="flex-1 bg-transparent text-xs text-white placeholder-white/20 outline-none"
                       />
                     </div>
+                    
+                    {connectedFiles.length > 0 && (
+                      <div className="flex flex-col border-b border-white/5 pb-2 mb-1">
+                        <div className="text-[9px] uppercase font-bold text-white/30 px-1 mb-1">Connected ({connectedFiles.length})</div>
+                        <div className="flex flex-col max-h-[100px] overflow-y-auto pr-1">
+                          {connectedFiles.map(({ node: res, connectionId }) => (
+                            <div 
+                              key={res.id} 
+                              className="flex items-center justify-between px-2 py-1 hover:bg-white/5 rounded-lg text-left transition-colors"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <LinkIcon size={12} className="text-emerald-400 shrink-0" />
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-xs text-white truncate">{res.name}.{res.extension}</span>
+                                  <span className="text-[9px] text-white/40 truncate">{res.path || "root"}</span>
+                                </div>
+                              </div>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeConnection(connectionId);
+                                }}
+                                className="text-white/40 hover:text-red-400 p-1 rounded transition-colors cursor-pointer"
+                                title="Disconnect"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex flex-col max-h-[160px] overflow-y-auto">
                       {connectionSearchResults.map(res => (
                         <button 
@@ -1192,6 +1193,7 @@ export default function BackendCanvas() {
                     style={{ left: 290, top: 0 }}
                     onClick={e => e.stopPropagation()}
                     onMouseDown={e => e.stopPropagation()}
+                    onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); openAntennaMenu(null); } }}
                   >
                     <div className="flex items-center justify-between px-1">
                       <div className="flex items-center gap-1.5 text-white/70">
@@ -1211,17 +1213,31 @@ export default function BackendCanvas() {
                             const target = nodes.find(n => n.id === conn.targetId);
                             if (!target) return null;
                             return (
-                              <button 
+                              <div 
                                 key={conn.id}
-                                onClick={() => triggerPortalWarp(target.id)}
-                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-white/5 rounded-lg text-left transition-colors group"
+                                className="w-full flex items-center justify-between px-2 py-1 hover:bg-white/5 rounded-lg group"
                               >
-                                <div className="flex flex-col min-w-0 pr-2">
-                                  <span className="text-xs text-white truncate">{target.name}.{target.extension}</span>
+                                <div 
+                                  onClick={() => triggerPortalWarp(target.id)}
+                                  className="flex flex-col min-w-0 pr-2 cursor-pointer flex-1"
+                                >
+                                  <span className="text-xs text-white truncate group-hover:text-blue-300 transition-colors">{target.name}.{target.extension}</span>
                                   <span className="text-[9px] text-white/40 truncate">{target.path || "root"}</span>
                                 </div>
-                                <ArrowRight size={10} className="text-emerald-400/40 group-hover:text-emerald-400 transition-colors shrink-0" />
-                              </button>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeConnection(conn.id);
+                                    }}
+                                    className="p-1 rounded text-white/20 hover:text-red-400 hover:bg-white/5 transition-colors cursor-pointer"
+                                    title="Disconnect"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                  <ArrowRight size={10} className="text-emerald-400/40 group-hover:text-emerald-400 transition-colors" />
+                                </div>
+                              </div>
                             );
                           })}
                         </div>
@@ -1234,17 +1250,31 @@ export default function BackendCanvas() {
                             const source = nodes.find(n => n.id === conn.sourceId);
                             if (!source) return null;
                             return (
-                              <button 
+                              <div 
                                 key={conn.id}
-                                onClick={() => triggerPortalWarp(source.id)}
-                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-white/5 rounded-lg text-left transition-colors group"
+                                className="w-full flex items-center justify-between px-2 py-1 hover:bg-white/5 rounded-lg group"
                               >
-                                <div className="flex flex-col min-w-0 pr-2">
-                                  <span className="text-xs text-white truncate">{source.name}.{source.extension}</span>
+                                <div 
+                                  onClick={() => triggerPortalWarp(source.id)}
+                                  className="flex flex-col min-w-0 pr-2 cursor-pointer flex-1"
+                                >
+                                  <span className="text-xs text-white truncate group-hover:text-blue-300 transition-colors">{source.name}.{source.extension}</span>
                                   <span className="text-[9px] text-white/40 truncate">{source.path || "root"}</span>
                                 </div>
-                                <ArrowLeft size={10} className="text-blue-400/40 group-hover:text-blue-400 transition-colors shrink-0" />
-                              </button>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeConnection(conn.id);
+                                    }}
+                                    className="p-1 rounded text-white/20 hover:text-red-400 hover:bg-white/5 transition-colors cursor-pointer"
+                                    title="Disconnect"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                  <ArrowLeft size={10} className="text-blue-400/40 group-hover:text-blue-400 transition-colors" />
+                                </div>
+                              </div>
                             );
                           })}
                         </div>
@@ -1485,10 +1515,10 @@ export default function BackendCanvas() {
                 <div className="text-[9px] uppercase font-bold text-white/30 px-1 pb-1 border-b border-white/5">Unconnected files</div>
                 <div className="flex flex-col max-h-[200px] overflow-y-auto">
                   {orphanNodes.map(n => (
-                    <div key={n.id} className="flex items-center group">
+                    <div key={n.id} className="flex items-center justify-between gap-1 px-2 py-1 hover:bg-white/5 rounded-lg group">
                       <button
                         onClick={() => { navigateToFolder(n.path); selectNode(n.id); setIsOrphanPanelOpen(false); }}
-                        className="flex flex-col items-start px-2 py-1.5 hover:bg-white/5 rounded-l-lg text-left transition-colors flex-1 min-w-0"
+                        className="flex flex-col items-start text-left transition-colors flex-1 min-w-0"
                       >
                         <span className="text-xs text-amber-300/90 truncate w-full">{n.name}.{n.extension}</span>
                         <span className="text-[9px] text-white/30 truncate w-full">{n.path || "root"}</span>
@@ -1498,7 +1528,7 @@ export default function BackendCanvas() {
                           e.stopPropagation();
                           deleteNode(n.id);
                         }}
-                        className="px-2 py-1.5 opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 hover:bg-white/5 rounded-r-lg transition-all h-full"
+                        className="p-1.5 opacity-0 group-hover:opacity-100 text-white/40 hover:text-red-400 hover:bg-white/10 rounded transition-all shrink-0 cursor-pointer"
                         title="Delete Orphan"
                       >
                         <Trash2 size={12} />
@@ -1615,16 +1645,90 @@ export default function BackendCanvas() {
           >
             Reset
           </button>
+          <div className="w-px h-4 bg-white/10 mx-0.5" />
+          <button
+            onClick={() => setIsCheatsheetOpen(true)}
+            className="w-7 h-7 flex items-center justify-center rounded text-white/60 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+            title="Keyboard Shortcuts Cheatsheet"
+          >
+            <span className="text-xs font-bold font-mono">?</span>
+          </button>
         </div>
+
+        {/* Shortcuts Cheatsheet Modal */}
+        {isCheatsheetOpen && (
+          <div 
+            className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center pointer-events-auto"
+            onClick={() => setIsCheatsheetOpen(false)}
+          >
+            <div 
+              className="bg-zinc-900/95 border border-zinc-800 rounded-2xl w-[400px] shadow-2xl p-5 flex flex-col gap-4 pointer-events-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>Keyboard Shortcuts</span>
+                </h3>
+                <button 
+                  onClick={() => setIsCheatsheetOpen(false)}
+                  className="text-white/40 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex flex-col gap-2.5 max-h-[350px] overflow-y-auto pr-1 text-xs">
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Pan Canvas</span>
+                  <kbd className="text-right text-white/80 font-mono">Space + Drag / Left/Middle Click Drag</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Zoom Canvas</span>
+                  <kbd className="text-right text-white/80 font-mono">Ctrl + Scroll / + / -</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Enter Folder</span>
+                  <kbd className="text-right text-white/80 font-mono">Double Click Folder</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Open File in Editor</span>
+                  <kbd className="text-right text-white/80 font-mono">Double Click Node Name</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Copy Node/Folder</span>
+                  <kbd className="text-right text-white/80 font-mono">Ctrl + C</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Cut Node/Folder</span>
+                  <kbd className="text-right text-white/80 font-mono">Ctrl + X</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Paste Node/Folder</span>
+                  <kbd className="text-right text-white/80 font-mono">Ctrl + V</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Duplicate Node/Folder</span>
+                  <kbd className="text-right text-white/80 font-mono">Ctrl + D</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                  <span className="text-white/50">Delete Node/Folder</span>
+                  <kbd className="text-right text-white/80 font-mono">Delete / Backspace</kbd>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pb-1">
+                  <span className="text-white/50">Close Popups / Cancel</span>
+                  <kbd className="text-right text-white/80 font-mono">Escape</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {clipboard?.action === 'cut' && (
-        <div className="fixed bottom-4 left-4 z-[100] bg-red-950/90 border border-red-500/30 px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs text-red-200 animate-bounce pointer-events-auto">
-          <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-          <span>Actively Cut: <strong className="font-semibold text-white font-mono">{clipboard.name}</strong></span>
+        <div className="fixed bottom-4 left-4 z-[100] bg-zinc-950/90 backdrop-blur border border-zinc-800 px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs text-zinc-200 pointer-events-auto">
+          <span>Ready to move {clipboard.itemType}: <strong className="font-semibold text-white font-mono">{clipboard.name}</strong></span>
           <button 
             onClick={() => setClipboard(null)} 
-            className="ml-1 text-red-400 hover:text-white p-0.5 rounded transition-colors"
+            className="ml-1 text-zinc-400 hover:text-white p-0.5 rounded transition-colors"
           >
             <X size={12} />
           </button>

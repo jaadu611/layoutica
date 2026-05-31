@@ -128,6 +128,7 @@ export interface StyleProps {
   backgroundSize?: string;
   backgroundPosition?: string;
   backgroundRepeat?: string;
+  backgroundAttachment?: string;
   opacity?: number;
   borderRadius?: string;
   boxShadow?: string;
@@ -286,6 +287,7 @@ export interface BuilderState {
   components: SavedComponent[];
   leftSidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
+  isLayersDetached: boolean;
 
   canvasBreakpoint: CanvasBreakpoint;
   customWidth: number;
@@ -350,6 +352,7 @@ export interface BuilderState {
   getSelectedElement: () => CanvasElement | undefined;
   setLeftSidebarCollapsed: (v: boolean) => void;
   setRightPanelCollapsed: (v: boolean) => void;
+  setLayersDetached: (v: boolean) => void;
 
   setCanvasBreakpoint: (v: CanvasBreakpoint) => void;
   setCustomWidth: (w: number) => void;

@@ -310,6 +310,7 @@ export const useBuilderStore = create<BuilderState>()(
       components: hydrated ? get().components : [],
       leftSidebarCollapsed: hydrated ? get().leftSidebarCollapsed : false,
       rightPanelCollapsed: false,
+      isLayersDetached: false,
 
       // Canvas view settings
       canvasBreakpoint: "desktop",
@@ -317,7 +318,7 @@ export const useBuilderStore = create<BuilderState>()(
       customHeight: 900,
       viewportClip: false,
       canvasBackground: "white" as const,
-      showGrid: false,
+      showGrid: true,
       showPadding: false,
       showMargin: false,
       exportMode: hydrated ? get().exportMode : null,
@@ -499,7 +500,15 @@ export const useBuilderStore = create<BuilderState>()(
           return {
             ...page,
             elements: updateElementInTree(page.elements, id, (el) => {
-              if (!state || state === "default") return updates;
+              if (!state || state === "default") {
+                if (updates.styles) {
+                  return {
+                    ...updates,
+                    styles: { ...el.styles, ...updates.styles }
+                  };
+                }
+                return updates;
+              }
               const stateKey =
                 state === "focus"
                   ? "focusStyles"
@@ -511,6 +520,9 @@ export const useBuilderStore = create<BuilderState>()(
               if (!stateKey) return updates;
               // Merge with the existing state-specific styles
               const existing = (el as any)[stateKey] ?? {};
+              if (updates.styles) {
+                return { [stateKey]: { ...existing, ...updates.styles } };
+              }
               return { [stateKey]: { ...existing, ...updates } };
             }),
           };
@@ -758,6 +770,10 @@ export const useBuilderStore = create<BuilderState>()(
       },
       setRightPanelCollapsed: (v) => {
         set({ rightPanelCollapsed: v });
+        triggerAutoSave(get());
+      },
+      setLayersDetached: (v) => {
+        set({ isLayersDetached: v });
         triggerAutoSave(get());
       },
 

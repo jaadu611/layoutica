@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useBuilderStore } from "@/lib/builder/frontend/store";
 import { useBackendStore } from "@/lib/builder/backend/store";
 import { generateAllPages } from "@/lib/builder/frontend/codeGenerator";
@@ -30,9 +30,13 @@ import {
   ArrowLeftRight,
   Shield,
   Settings,
+  Home,
+  X,
+  Folder,
+  FileText,
 } from "lucide-react";
 import DesignTokensPanel from "./DesignTokensPanel";
-import { CanvasBackground, CanvasBreakpoint } from "@/lib/builder/frontend/types";
+import { CanvasBackground, CanvasBreakpoint, CanvasElement } from "@/lib/builder/frontend/types";
 import { DEVICE_PRESETS, resolveDeviceDimensions } from "@/lib/builder/frontend/devices";
 
 export interface CanvasViewSettings {
@@ -83,7 +87,13 @@ export default function Toolbar() {
     redo: backendRedo,
     undoable: backendUndoable,
     redoable: backendRedoable,
+    activeFolderPath,
+    navigateToFolder,
+    nodes,
+    selectNode,
+    organizeWorkspaceGrid,
   } = useBackendStore();
+
   const {
     pages,
     components,
@@ -110,6 +120,235 @@ export default function Toolbar() {
     setShowMargin,
     clearCanvas,
   } = useBuilderStore();
+
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Breadcrumbs computation
+  const breadcrumbs = activeFolderPath ? activeFolderPath.split("/") : [];
+
+  const handleBreadcrumbClick = (index: number) => {
+    if (index === -1) {
+      navigateToFolder("");
+    } else {
+      const newPath = breadcrumbs.slice(0, index + 1).join("/");
+      navigateToFolder(newPath);
+    }
+    selectNode(null);
+  };
+
+  // Helper to extract folders from backend nodes path
+  const allFolders = useMemo(() => {
+    const folders = new Set<string>();
+    nodes.forEach((n) => {
+      if (n.path) {
+        const parts = n.path.split("/");
+        for (let i = 1; i <= parts.length; i++) {
+          folders.add(parts.slice(0, i).join("/"));
+        }
+      }
+    });
+    return Array.from(folders).map((f) => {
+      const parts = f.split("/");
+      return {
+        type: "folder" as const,
+        id: `folder-${f}`,
+        name: parts[parts.length - 1],
+        path: f,
+      };
+    });
+  }, [nodes]);
+
+  // Recursively flatten frontend elements
+  const flattenElements = (
+    elements: CanvasElement[],
+    pageId: string,
+    pageName: string,
+    results: any[] = []
+  ): any[] => {
+    elements.forEach((el) => {
+      const name = el.metadata?.name || el.content?.slice(0, 22) || el.type.replace(/([A-Z])/g, " $1").trim();
+      results.push({
+        type: "element",
+        id: el.id,
+        name,
+        elementType: el.type,
+        pageId,
+        pageName,
+      });
+      if (el.children?.length) {
+        flattenElements(el.children, pageId, pageName, results);
+      }
+    });
+    return results;
+  };
+
+  // Combined search results ( AutoCAD-style search over folders, files, pages, and elements )
+  const searchResults = useMemo(() => {
+    if (!globalSearchQuery) return [];
+    const query = globalSearchQuery.toLowerCase();
+
+    if (mode === "backend") {
+      const fileResults = nodes
+        .filter(
+          (n) =>
+            n.name.toLowerCase().includes(query) ||
+            n.path.toLowerCase().includes(query)
+        )
+        .map((n) => ({
+          type: "file" as const,
+          id: n.id,
+          name: n.name,
+          extension: n.extension || "ts",
+          path: n.path,
+        }));
+
+      const folderResults = allFolders
+        .filter(
+          (f) =>
+            f.name.toLowerCase().includes(query) ||
+            f.path.toLowerCase().includes(query)
+        )
+        .map((f) => ({
+          type: "folder" as const,
+          id: f.id,
+          name: f.name,
+          path: f.path,
+        }));
+
+      return [...fileResults, ...folderResults];
+    } else {
+      // Pages search
+      const pageResults = pages
+        .filter((p) => p.name.toLowerCase().includes(query))
+        .map((p) => ({
+          type: "page" as const,
+          id: p.id,
+          name: p.name,
+          pageId: p.id,
+        }));
+
+      // Elements search
+      const elementResults: any[] = [];
+      pages.forEach((page) => {
+        flattenElements(page.elements || [], page.id, page.name, elementResults);
+      });
+
+      const filteredElements = elementResults.filter(
+        (res) =>
+          res.name.toLowerCase().includes(query) ||
+          res.elementType.toLowerCase().includes(query) ||
+          res.pageName.toLowerCase().includes(query)
+      );
+
+      return [...pageResults, ...filteredElements];
+    }
+  }, [mode, globalSearchQuery, nodes, allFolders, pages]);
+
+  // Execute result activation
+  const executeSearchAction = (result: any) => {
+    if (result.type === "file") {
+      navigateToFolder(result.path);
+      selectNode(result.id);
+      window.dispatchEvent(new CustomEvent("center-on-node", { detail: { nodeId: result.id } }));
+    } else if (result.type === "folder") {
+      navigateToFolder(result.path);
+      selectNode(null);
+    } else if (result.type === "page") {
+      setActivePage(result.pageId);
+    } else if (result.type === "element") {
+      setActivePage(result.pageId);
+      useBuilderStore.getState().selectElement(result.id);
+      useBuilderStore.getState().setStylingState("default");
+    }
+    setIsGlobalSearchOpen(false);
+    setGlobalSearchQuery("");
+  };
+
+  // Reset selected index on query change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [globalSearchQuery, searchResults]);
+
+  // Handle keyboard keys in open search dialog
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((prev) =>
+        searchResults.length > 0 ? (prev + 1) % searchResults.length : 0
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((prev) =>
+        searchResults.length > 0
+          ? (prev - 1 + searchResults.length) % searchResults.length
+          : 0
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (searchResults[selectedIndex]) {
+        executeSearchAction(searchResults[selectedIndex]);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setIsGlobalSearchOpen(false);
+      setGlobalSearchQuery("");
+    }
+  };
+
+  // AutoCAD-style Key Listener (Start typing anywhere to search)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          (activeEl as HTMLElement).isContentEditable);
+      if (isInput) return;
+
+      // Ignore modifier keys
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Only capture printable alphanumeric keys
+      if (e.key.length === 1 && /^[a-zA-Z0-9]$/.test(e.key)) {
+        e.preventDefault();
+        setGlobalSearchQuery(e.key);
+        setIsGlobalSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
+
+  // Auto-focus search input when opened
+  useEffect(() => {
+    if (isGlobalSearchOpen) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    }
+  }, [isGlobalSearchOpen]);
+
+  // Listen for clicks outside global search dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(event.target as Node)) {
+        setIsGlobalSearchOpen(false);
+        setGlobalSearchQuery("");
+      }
+    }
+    if (isGlobalSearchOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isGlobalSearchOpen]);
+
 
   const undoable = useBuilderStore((s) => s.past.length > 0);
   const redoable = useBuilderStore((s) => s.future.length > 0);
@@ -205,20 +444,6 @@ export default function Toolbar() {
       <div className="h-12 border-b border-panel-border bg-panel-bg flex items-center justify-between px-4 shrink-0 select-none gap-3">
         {/* ── LEFT ── */}
         <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-1 border-r border-panel-border pr-4">
-            <ToolbarBtn
-              onClick={handleSaveProject}
-              title="Save project (.ltica)"
-            >
-              <Save size={15} />
-            </ToolbarBtn>
-            <ToolbarBtn
-              onClick={handleLoadProject}
-              title="Load project (.ltica)"
-            >
-              <FolderOpen size={15} />
-            </ToolbarBtn>
-          </div>
 
           {/* Mode Switcher */}
           <div className="flex items-center bg-white/4 p-0.5 rounded-lg border border-white/5 shrink-0 h-8 mr-2 select-none">
@@ -273,65 +498,91 @@ export default function Toolbar() {
         {/* ── CENTER ── */}
         <div className="flex items-center gap-1.5 flex-1 justify-center min-w-0">
           {mode === "backend" ? (
-            <>
+            <div className="flex items-center gap-3">
+              {/* Breadcrumbs */}
+              <div className="flex items-center gap-1 bg-white/4 px-2 py-1 rounded-lg border border-white/5 max-w-[280px] overflow-hidden truncate h-8 shrink-0">
+                <button
+                  onClick={() => handleBreadcrumbClick(-1)}
+                  className="flex items-center gap-1 text-[11px] text-white/45 hover:text-white/80 transition-colors cursor-pointer"
+                >
+                  <Home size={11} />
+                  <span>root</span>
+                </button>
+                {breadcrumbs.map((crumb, idx) => (
+                  <span key={idx} className="flex items-center">
+                    <span className="text-white/20 mx-1 text-[10px]">/</span>
+                    <button
+                      onClick={() => handleBreadcrumbClick(idx)}
+                      className={`text-[11px] transition-colors cursor-pointer ${
+                        idx === breadcrumbs.length - 1
+                          ? "text-white font-medium"
+                          : "text-white/45 hover:text-white/85"
+                      }`}
+                    >
+                      {crumb}
+                    </button>
+                  </span>
+                ))}
+              </div>
+
               <div className="relative select-none" ref={templatesDropdownRef}>
                 <button
                   onClick={() => setShowTemplatesDropdown(!showTemplatesDropdown)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white transition-all cursor-pointer text-xs font-semibold h-8"
-              >
-                <FileCode size={13} className="text-violet-400" />
-                <span>File Templates</span>
-                <ChevronDown size={12} className={`opacity-60 transition-transform ${showTemplatesDropdown ? "rotate-180" : ""}`} />
-              </button>
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white transition-all cursor-pointer text-xs font-semibold h-8"
+                >
+                  <FileCode size={13} className="text-violet-400" />
+                  <span>File Templates</span>
+                  <ChevronDown size={12} className={`opacity-60 transition-transform ${showTemplatesDropdown ? "rotate-180" : ""}`} />
+                </button>
 
-              {showTemplatesDropdown && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-52 flex flex-col bg-[#18181b] border border-zinc-800 rounded-lg z-[100] p-1 animate-in fade-in slide-in-from-top-1 duration-150 select-none">
-                  <div className="px-3 py-1.5 text-[9px] font-bold text-white/30 uppercase tracking-widest select-none border-b border-white/5 mb-1">
-                    Drag to Canvas
+                {showTemplatesDropdown && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-52 flex flex-col bg-[#18181b] border border-zinc-800 rounded-lg z-[100] p-1 animate-in fade-in slide-in-from-top-1 duration-150 select-none">
+                    <div className="px-3 py-1.5 text-[9px] font-bold text-white/30 uppercase tracking-widest select-none border-b border-white/5 mb-1">
+                      Drag to Canvas
+                    </div>
+                    {[
+                      { name: "db.ts", icon: Database, color: "text-emerald-400" },
+                      { name: "store.ts", icon: Layers, color: "text-blue-400" },
+                      { name: "route.ts", icon: Route, color: "text-violet-400" },
+                      { name: "middleware.ts", icon: ArrowLeftRight, color: "text-amber-400" },
+                      { name: "auth.ts", icon: Shield, color: "text-rose-400" },
+                      { name: "config.ts", icon: Settings, color: "text-zinc-400" },
+                      { name: "generic.ts", label: "file.ts", icon: FileCode, color: "text-teal-400" },
+                    ].map((template) => {
+                      const TemplateIcon = template.icon;
+                      const dragVal = template.name === "generic.ts" ? "generic" : template.name;
+                      const label = template.label || template.name;
+                      return (
+                        <div
+                          key={template.name}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("text/plain", dragVal);
+                            // Close dropdown after short delay to let drag start successfully
+                            setTimeout(() => setShowTemplatesDropdown(false), 200);
+                          }}
+                          className="flex items-center gap-2 px-3 py-2 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-md cursor-grab active:cursor-grabbing select-none"
+                        >
+                          <GripVertical size={11} className="text-white/20" />
+                          <TemplateIcon size={12} className={template.color} />
+                          <span className="font-medium">{label}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {[
-                    { name: "db.ts", icon: Database },
-                    { name: "store.ts", icon: Layers },
-                    { name: "route.ts", icon: Route },
-                    { name: "middleware.ts", icon: ArrowLeftRight },
-                    { name: "auth.ts", icon: Shield },
-                    { name: "config.ts", icon: Settings },
-                    { name: "generic.ts", label: "file.ts", icon: FileCode },
-                  ].map((template) => {
-                    const TemplateIcon = template.icon;
-                    const dragVal = template.name === "generic.ts" ? "generic" : template.name;
-                    const label = template.label || template.name;
-                    return (
-                      <div
-                        key={template.name}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("text/plain", dragVal);
-                          // Close dropdown after short delay to let drag start successfully
-                          setTimeout(() => setShowTemplatesDropdown(false), 200);
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-md cursor-grab active:cursor-grabbing select-none"
-                      >
-                        <GripVertical size={11} className="text-white/20" />
-                        <TemplateIcon size={12} className="text-violet-400" />
-                        <span className="font-medium">{label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                )}
+              </div>
+
+              {/* Grid */}
+              <ToolbarBtn
+                onClick={() => setShowGrid(!showGrid)}
+                title={showGrid ? "Hide grid" : "Show grid"}
+                active={showGrid}
+                activeColor="text-violet-300 bg-violet-500/15"
+              >
+                <Grid3X3 size={14} />
+              </ToolbarBtn>
             </div>
-            
-            {/* Grid */}
-            <ToolbarBtn
-              onClick={() => setShowGrid(!showGrid)}
-              title={showGrid ? "Hide grid" : "Show grid"}
-              active={showGrid}
-              activeColor="text-violet-300 bg-violet-500/15"
-            >
-              <Grid3X3 size={14} />
-            </ToolbarBtn>
-          </>
           ) : (
             <>
               {/* Device Selection Dropdown & Dimensions */}
@@ -546,11 +797,16 @@ export default function Toolbar() {
         {/* ── RIGHT ── */}
         <div className="flex items-center gap-2 shrink-0">
           {mode === "backend" ? (
-            <div
-              className="flex items-center gap-1.5 text-[11px] text-[#a78bfa] border border-[#a78bfa]/20 rounded-[5px] px-3 py-1.5 font-medium select-none bg-[#a78bfa]/5"
-              style={{ fontFamily: "sans-serif" }}
-            >
-              Backend Active
+            <div className="flex items-center gap-2 select-none">
+              {/* Clean Layout */}
+              <button
+                onClick={organizeWorkspaceGrid}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/4 hover:bg-white/10 border border-white/5 hover:border-white/20 text-white/60 hover:text-white transition-colors text-xs font-semibold cursor-pointer h-8 shrink-0"
+                title="Clean Layout (Topological Connection-based Grid Layout)"
+              >
+                <Route size={12} className="text-violet-400" />
+                <span>Clean Layout</span>
+              </button>
             </div>
           ) : (
             <>
@@ -590,6 +846,120 @@ export default function Toolbar() {
           files={exportFiles}
           onClose={() => setShowExport(false)}
         />
+      )}
+      {isGlobalSearchOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[499]"
+            onClick={() => {
+              setIsGlobalSearchOpen(false);
+              setGlobalSearchQuery("");
+            }}
+          />
+
+          {/* Command Palette */}
+          <div
+            ref={searchDropdownRef}
+            className="fixed top-[15%] left-1/2 -translate-x-1/2 w-[500px] bg-zinc-950/95 border border-zinc-800 rounded-2xl shadow-[0_32px_80px_rgba(0,0,0,0.85)] z-[500] p-3 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-200 overflow-hidden"
+          >
+            {/* Input Header */}
+            <div className="flex items-center gap-3 px-3 py-1 bg-white/[0.02] border border-white/5 rounded-xl">
+              <Search size={16} className="text-white/30 shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={globalSearchQuery}
+                onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder={
+                  mode === "backend"
+                    ? "Search workspace files and folders..."
+                    : "Search page elements and site pages..."
+                }
+                className="flex-1 bg-transparent text-xs text-white placeholder-white/30 focus:outline-none py-2.5 font-medium"
+              />
+              <div className="flex items-center gap-1.5 shrink-0 select-none">
+                <kbd className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-white/40 font-sans border border-white/5">ESC</kbd>
+              </div>
+            </div>
+
+            {/* Results List */}
+            <div className="flex flex-col max-h-[280px] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent] pr-1">
+              {searchResults.length > 0 ? (
+                <div className="flex flex-col gap-0.5">
+                  {searchResults.map((res, idx) => {
+                    const isSelected = idx === selectedIndex;
+                    let IconComp = FileCode;
+                    let iconColor = "text-violet-400";
+                    let typeLabel = "";
+
+                    if (res.type === "folder") {
+                      IconComp = Folder;
+                      iconColor = "text-amber-400";
+                      typeLabel = "Folder";
+                    } else if (res.type === "file") {
+                      IconComp = Database;
+                      iconColor = "text-blue-400";
+                      typeLabel = `File (.${(res as any).extension})`;
+                    } else if (res.type === "page") {
+                      IconComp = FileText;
+                      iconColor = "text-emerald-400";
+                      typeLabel = "Page";
+                    } else if (res.type === "element") {
+                      IconComp = BoxSelect;
+                      iconColor = "text-pink-400";
+                      typeLabel = `${(res as any).elementType}`;
+                    }
+
+                    return (
+                      <button
+                        key={res.id}
+                        onClick={() => executeSearchAction(res)}
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-left cursor-pointer transition-all border ${
+                          isSelected
+                            ? "bg-white/8 border-white/10 text-white"
+                            : "bg-transparent border-transparent text-white/60 hover:bg-white/[0.02]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <IconComp size={15} className={`${iconColor} shrink-0`} />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-semibold truncate">
+                              {res.name}
+                            </span>
+                            <span className="text-[10px] text-white/30 truncate mt-0.5">
+                              {res.type === "element"
+                                ? `Page: ${(res as any).pageName}`
+                                : res.path || "root"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 select-none">
+                          <span className="text-[9px] uppercase tracking-wider text-white/20 font-bold font-sans">
+                            {typeLabel}
+                          </span>
+                          {isSelected && (
+                            <kbd className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white/80 font-sans border border-white/10">⏎ Enter</kbd>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-8 text-center text-xs text-white/30 select-none flex flex-col items-center gap-1.5">
+                  <Search size={20} className="opacity-20" />
+                  <span>
+                    {globalSearchQuery
+                      ? "No search results found"
+                      : "Type keywords to search files, folders, pages, and canvas elements."}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
       {showClearConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm select-none">

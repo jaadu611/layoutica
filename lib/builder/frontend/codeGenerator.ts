@@ -263,6 +263,8 @@ function stylesToTailwind(
     inlineStyle.backgroundPosition = styles.backgroundPosition;
   if (styles.backgroundRepeat)
     inlineStyle.backgroundRepeat = styles.backgroundRepeat;
+  if (styles.backgroundAttachment)
+    inlineStyle.backgroundAttachment = styles.backgroundAttachment;
   if (
     styles.gradientType === "linear" &&
     styles.gradientStartColor &&
@@ -464,7 +466,13 @@ function stylesToTailwind(
 function serializeStyle(style: Record<string, string>): string {
   const entries = Object.entries(style)
     .filter(([, v]) => v !== undefined && v !== "")
-    .map(([k, v]) => `${k}: "${v}"`)
+    .map(([k, v]) => {
+      // If value contains double quotes (e.g. url("data:...")), use backtick template
+      if (typeof v === "string" && v.includes('"')) {
+        return `${k}: \`${v.replace(/`/g, "\\`")}\``;
+      }
+      return `${k}: "${v}"`;
+    })
     .join(", ");
   return entries ? `{ ${entries} }` : "";
 }

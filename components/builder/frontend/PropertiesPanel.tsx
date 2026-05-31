@@ -2156,30 +2156,63 @@ export default function PropertiesPanel() {
             />
           </Field>
           {gsv("backgroundImage") && (
-            <Row>
-              <Field label="Size">
-                <Select
-                  value={gsv("backgroundSize") || "cover"}
-                  onChange={(v) => updateStyle("backgroundSize", v)}
-                  options={[
-                    { value: "cover", label: "Cover" },
-                    { value: "contain", label: "Contain" },
-                    { value: "auto", label: "Auto" },
-                  ]}
-                />
-              </Field>
-              <Field label="Position">
-                <Select
-                  value={gsv("backgroundPosition") || "center"}
-                  onChange={(v) => updateStyle("backgroundPosition", v)}
-                  options={[
-                    { value: "center", label: "Center" },
-                    { value: "top", label: "Top" },
-                    { value: "bottom", label: "Bottom" },
-                  ]}
-                />
-              </Field>
-            </Row>
+            <>
+              <Row>
+                <Field label="Size">
+                  <Select
+                    value={gsv("backgroundSize") || "cover"}
+                    onChange={(v) => updateStyle("backgroundSize", v)}
+                    options={[
+                      { value: "cover", label: "Cover" },
+                      { value: "contain", label: "Contain" },
+                      { value: "auto", label: "Auto" },
+                    ]}
+                  />
+                </Field>
+                <Field label="Repeat">
+                  <Select
+                    value={gsv("backgroundRepeat") || "no-repeat"}
+                    onChange={(v) => updateStyle("backgroundRepeat", v)}
+                    options={[
+                      { value: "no-repeat", label: "No Repeat" },
+                      { value: "repeat", label: "Repeat" },
+                      { value: "repeat-x", label: "Repeat X" },
+                      { value: "repeat-y", label: "Repeat Y" },
+                    ]}
+                  />
+                </Field>
+              </Row>
+              <Row>
+                <Field label="Position">
+                  <Select
+                    value={gsv("backgroundPosition") || "center"}
+                    onChange={(v) => updateStyle("backgroundPosition", v)}
+                    options={[
+                      { value: "center", label: "Center" },
+                      { value: "top", label: "Top" },
+                      { value: "bottom", label: "Bottom" },
+                      { value: "left", label: "Left" },
+                      { value: "right", label: "Right" },
+                      { value: "top left", label: "Top Left" },
+                      { value: "top right", label: "Top Right" },
+                      { value: "bottom left", label: "Bottom Left" },
+                      { value: "bottom right", label: "Bottom Right" },
+                    ]}
+                  />
+                </Field>
+                <Field label="Attachment">
+                  <Select
+                    value={gsv("backgroundAttachment") || "scroll"}
+                    onChange={(v) => updateStyle("backgroundAttachment", v)}
+                    options={[
+                      { value: "scroll", label: "Scroll" },
+                      { value: "fixed", label: "Fixed" },
+                      { value: "local", label: "Local" },
+                    ]}
+                  />
+                </Field>
+              </Row>
+            </>
           )}
         </Section>
 

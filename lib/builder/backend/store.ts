@@ -69,11 +69,26 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   antennaMenuNodeId: null,
 
   togglePinnedNode: (id) => {
-    set((state) => ({
-      pinnedNodes: state.pinnedNodes.includes(id)
+    const { nodes, activeFolderPath } = get();
+    const node = nodes.find(n => n.id === id);
+    const isGhost = node && node.path !== activeFolderPath;
+
+    set((state) => {
+      const isCurrentlyPinned = state.pinnedNodes.includes(id);
+      const nextPinned = isCurrentlyPinned
         ? state.pinnedNodes.filter(n => n !== id)
-        : [...state.pinnedNodes, id]
-    }));
+        : [...state.pinnedNodes, id];
+        
+      let nextGhost = state.activeGhostNodes;
+      if (isGhost && isCurrentlyPinned) {
+        nextGhost = state.activeGhostNodes.filter(n => n !== id);
+      }
+
+      return {
+        pinnedNodes: nextPinned,
+        activeGhostNodes: nextGhost
+      };
+    });
     syncLayoutToHost(get());
   },
 
@@ -340,77 +355,71 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     const activeNodes = nodes.filter(n => n.path === activeFolderPath);
     if (activeNodes.length === 0) return;
 
-    // Build adjacency list for topological layout based on connections
+    // Build undirected adjacency list for grouping connected nodes
     const adj = new Map<string, string[]>();
-    const inDegree = new Map<string, number>();
     const nodeMap = new Map<string, BackendFileNode>();
 
     activeNodes.forEach(n => {
       adj.set(n.id, []);
-      inDegree.set(n.id, 0);
       nodeMap.set(n.id, n);
     });
 
     connections.forEach(c => {
       if (adj.has(c.sourceId) && adj.has(c.targetId)) {
         adj.get(c.sourceId)!.push(c.targetId);
-        inDegree.set(c.targetId, (inDegree.get(c.targetId) || 0) + 1);
+        adj.get(c.targetId)!.push(c.sourceId);
       }
     });
 
-    // Topological Sort / Kahn's algorithm to separate into layers/columns
-    const queue: string[] = [];
-    inDegree.forEach((deg, id) => {
-      if (deg === 0) queue.push(id);
-    });
-
-    const layers: string[][] = [];
+    // BFS to find connected components and order nodes within them
     const visited = new Set<string>();
+    const orderedNodeIds: string[] = [];
 
-    while (queue.length > 0) {
-      const layerSize = queue.length;
-      const currentLayer: string[] = [];
-      for (let i = 0; i < layerSize; i++) {
-        const curr = queue.shift()!;
-        currentLayer.push(curr);
-        visited.add(curr);
-        const neighbors = adj.get(curr) || [];
-        neighbors.forEach(neighbor => {
-          if (!visited.has(neighbor)) {
-            inDegree.set(neighbor, inDegree.get(neighbor)! - 1);
-            if (inDegree.get(neighbor) === 0) {
+    activeNodes.forEach(node => {
+      if (!visited.has(node.id)) {
+        const queue: string[] = [node.id];
+        visited.add(node.id);
+        while (queue.length > 0) {
+          const curr = queue.shift()!;
+          orderedNodeIds.push(curr);
+          const neighbors = adj.get(curr) || [];
+          neighbors.forEach(neighbor => {
+            if (!visited.has(neighbor)) {
+              visited.add(neighbor);
               queue.push(neighbor);
             }
-          }
-        });
+          });
+        }
       }
-      layers.push(currentLayer);
-    }
-
-    // Add remaining unvisited node cycles to final layers
-    const unvisited = activeNodes.filter(n => !visited.has(n.id));
-    if (unvisited.length > 0) {
-      layers.push(unvisited.map(n => n.id));
-    }
-
-    // Calculate layout columns and rows dynamically, accounting for expanded dimensions
-    // Expanded nodes take up roughly 340px vertical space, regular ones 90px. Horizontal separation is 340px.
-    let currentX = 40;
-    layers.forEach(layer => {
-      let currentY = 40;
-      let maxWidthInLayer = 300;
-      layer.forEach(nodeId => {
-        const node = nodeMap.get(nodeId);
-        if (!node) return;
-        const height = node.isExpanded ? 340 : 90;
-        updateNode(node.id, {
-          x: currentX,
-          y: currentY
-        });
-        currentY += height + 40; // Add padding margin below node
-      });
-      currentX += maxWidthInLayer + 60; // Advance column
     });
+
+    // Lay out nodes in a 3-column row-major grid
+    const COLS = 3;
+    let currentY = 40;
+    let rowHeight = 0;
+
+    orderedNodeIds.forEach((nodeId, idx) => {
+      const node = nodeMap.get(nodeId);
+      if (!node) return;
+
+      const col = idx % COLS;
+      if (col === 0 && idx > 0) {
+        currentY += rowHeight + 48; // Spaced 48px vertical row gap
+        rowHeight = 0;
+      }
+
+      const nodeX = 40 + col * (280 + 40); // 280px node width + 40px column gap
+      const nodeHeight = node.isExpanded ? 340 : 90;
+      rowHeight = Math.max(rowHeight, nodeHeight);
+
+      updateNode(node.id, {
+        x: nodeX,
+        y: currentY
+      });
+    });
+
+    // Calculate currentX for virtual folders as column 3 (to the right of grid)
+    const currentX = 40 + COLS * 320; // COLS * (280 + 40)
 
     // Arrange virtual folders at the very end as a clean sidebar/column
     const vfMap = new Map<string, { id: string, name: string, x: number, y: number, count: number }>();
@@ -441,7 +450,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
           y: fn.y + folderDy
         });
       });
-      folderY += 100; // folders height spacing
+      folderY += 72; // Compact folders height spacing (folder height ~52px + 20px gap)
     });
   },
 

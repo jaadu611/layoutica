@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Toolbar from "@/components/builder/frontend/Toolbar";
 import Sidebar from "@/components/builder/frontend/Sidebar";
 import Canvas from "@/components/builder/frontend/Canvas";
@@ -15,6 +15,9 @@ import {
   ChevronDown,
   Sparkles,
   Terminal,
+  Layers,
+  X,
+  ExternalLink,
 } from "lucide-react";
 
 import { useBackendStore } from "@/lib/builder/backend/store";
@@ -35,6 +38,8 @@ export default function BuilderPage() {
     setExportMode,
     loadProject,
     activePageId,
+    isLayersDetached,
+    setLayersDetached,
   } = useBuilderStore();
 
   const [mounted, setMounted] = useState(false);
@@ -302,38 +307,23 @@ export default function BuilderPage() {
 
       <Toolbar />
       <div className="flex flex-1 overflow-hidden relative bg-app-bg">
-        {mode === "backend" ? <BackendCanvas /> : <Canvas />}
+        <div className={`flex-1 flex flex-col min-w-0 ${mode === "backend" ? "hidden" : ""}`}>
+          <Canvas />
+        </div>
+        <div className={`flex-1 flex flex-col min-w-0 ${mode === "backend" ? "" : "hidden"}`}>
+          <BackendCanvas />
+        </div>
 
         {/* Floating Sidebar Section */}
         {mode === "frontend" && (
           <div
-            className="absolute left-8 top-6 z-40 flex flex-col gap-2"
-            style={{ width: 230 }}
+            className="absolute left-8 top-6 z-40 flex flex-col gap-2 items-start transition-all duration-300 ease-in-out"
+            style={{ width: isLayersDetached && !leftSidebarCollapsed ? 472 : 230 }}
           >
-            {/* Main Sidebar Box — no inline height, GSAP owns it after mount */}
-            <div
-              className={`flex flex-col overflow-hidden bg-panel-bg shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto origin-top transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                leftSidebarCollapsed || !mounted
-                  ? "opacity-0 scale-95 -translate-y-2 pointer-events-none"
-                  : "opacity-100 scale-100 translate-y-0"
-              }`}
-              style={{
-                height: leftSidebarCollapsed || !mounted ? 0 : "64vh",
-                border:
-                  leftSidebarCollapsed || !mounted
-                    ? "none"
-                    : "1px solid var(--panel-border)",
-              }}
-            >
-              <div className="flex-1 flex flex-col min-h-0 bg-panel-bg/95 backdrop-blur-3xl">
-                {mounted && <Sidebar />}
-              </div>
-            </div>
-
             {/* Compact Toggle Button */}
             <button
               onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
-              className="w-full h-8 bg-panel-bg/80 backdrop-blur-xl border border-panel-border rounded-xl flex items-center justify-center text-white/20 hover:text-white/60 transition-all cursor-pointer group shadow-lg pointer-events-auto relative z-50 overflow-hidden"
+              className="w-[230px] h-8 bg-panel-bg/80 backdrop-blur-xl border border-panel-border rounded-xl flex items-center justify-center text-white/20 hover:text-white/60 transition-all cursor-pointer group shadow-lg pointer-events-auto relative z-50 overflow-hidden"
               style={{ outline: "none" }}
             >
               <div className="flex items-center gap-2 transition-transform duration-200 active:scale-95">
@@ -351,6 +341,72 @@ export default function BuilderPage() {
               </div>
               <div className="absolute inset-x-0 top-0 h-px bg-white/5 pointer-events-none" />
             </button>
+
+            {/* Side-by-side Panels Wrapper */}
+            <div className="flex gap-3 items-start pointer-events-none w-full">
+              {/* Main Sidebar Box */}
+              <div
+                className={`flex flex-col overflow-hidden bg-panel-bg shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto origin-top transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                  leftSidebarCollapsed || !mounted
+                    ? "opacity-0 scale-95 -translate-y-2 pointer-events-none"
+                    : "opacity-100 scale-100 translate-y-0"
+                }`}
+                style={{
+                  width: 230,
+                  height: leftSidebarCollapsed || !mounted ? 0 : "64vh",
+                  border:
+                    leftSidebarCollapsed || !mounted
+                      ? "none"
+                      : "1px solid var(--panel-border)",
+                }}
+              >
+                <div className="flex-1 flex flex-col min-h-0 bg-panel-bg/95 backdrop-blur-3xl">
+                  {mounted && <Sidebar />}
+                </div>
+              </div>
+
+              {/* Detached Layers Panel */}
+              {isLayersDetached && (
+                <div
+                  className={`flex flex-col overflow-hidden bg-panel-bg shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto origin-top transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                    leftSidebarCollapsed || !mounted
+                      ? "opacity-0 scale-95 -translate-y-2 pointer-events-none"
+                      : "opacity-100 scale-100 translate-y-0"
+                  }`}
+                  style={{
+                    width: 230,
+                    height: leftSidebarCollapsed || !mounted ? 0 : "64vh",
+                    border:
+                      leftSidebarCollapsed || !mounted
+                        ? "none"
+                        : "1px solid var(--panel-border)",
+                  }}
+                >
+                  <div className="flex-1 flex flex-col min-h-0 bg-panel-bg/95 backdrop-blur-3xl">
+                    {/* Detached Panel Header */}
+                    <div className="flex items-center justify-between h-11 px-3 border-b border-panel-border shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        <Layers size={12} className="text-white/40" />
+                        <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest font-sans">
+                          Layers
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setLayersDetached(false)}
+                        className="p-0.5 h-5 w-5 flex items-center justify-center bg-white/4 hover:bg-white/10 rounded text-white/45 hover:text-white transition-colors cursor-pointer shrink-0 border border-white/5"
+                        title="Reattach to Sidebar"
+                      >
+                        <ExternalLink size={9} className="rotate-180" />
+                      </button>
+                    </div>
+                    {/* Content */}
+                    <div className="flex-1 flex flex-col min-h-0">
+                      <Sidebar detachedOnly={true} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

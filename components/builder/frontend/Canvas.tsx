@@ -50,6 +50,17 @@ const STYLE_SKIP = new Set([
   "tableCellPadding",
 ]);
 
+const resolveSimulatedViewportHeight = (val: any, simulatedHeight: number): any => {
+  if (typeof val !== "string") return val;
+  const regex = /^([\d.]+)(vh|dvh|svh|lvh)$/;
+  const match = val.trim().match(regex);
+  if (match) {
+    const num = parseFloat(match[1]);
+    return `${(num / 100) * simulatedHeight}px`;
+  }
+  return val;
+};
+
 function styleObjToDeclarations(styles: Record<string, any>): string {
   const lines: string[] = [];
   for (const [key, val] of Object.entries(styles)) {
@@ -610,6 +621,7 @@ function RenderElement({
     canvasBreakpoint,
     customWidth,
     customHeight,
+    viewportClip,
   } = useBuilderStore();
 
   const preset = DEVICE_PRESETS.find((d) => d.id === canvasBreakpoint);
@@ -835,7 +847,21 @@ function RenderElement({
   const isAbsolute =
     el.styles.position === "absolute" || el.styles.position === "fixed";
 
+  const { height: resolvedHeight } = resolveDeviceDimensions(
+    canvasBreakpoint,
+    customWidth,
+    customHeight
+  );
+  const simulatedHeight = resolvedHeight;
+
   const finalStyles = { ...restStyles };
+  // Always resolve vh/dvh units so elements are identically sized in both viewport modes
+  const propertiesToResolve = ["height", "minHeight", "maxHeight", "top", "bottom"];
+  propertiesToResolve.forEach(prop => {
+    if (finalStyles[prop]) {
+      finalStyles[prop] = resolveSimulatedViewportHeight(finalStyles[prop], simulatedHeight);
+    }
+  });
   if (finalStyles.height && finalStyles.height !== "auto" && finalStyles.flex === "1") {
     finalStyles.flex = "none";
   }
@@ -2071,7 +2097,7 @@ export default function Canvas() {
       customHeight
     );
     const artboardWidth = resolvedWidth;
-    const artboardHeight = viewportClip ? resolvedHeight : 550;
+    const artboardHeight = resolvedHeight;
 
     const padding = 80;
     const availableWidth = rect.width - padding;
@@ -2090,7 +2116,7 @@ export default function Canvas() {
       x: rect.width / 2 - pageX * finalZoom,
       y: rect.height / 2 - pageY * finalZoom,
     });
-  }, [canvasBreakpoint, customWidth, customHeight, viewportClip, setZoom, setPan, pages, activePageId, isolatedPageId]);
+  }, [canvasBreakpoint, customWidth, customHeight, setZoom, setPan, pages, activePageId, isolatedPageId]);
 
   const centerArtboard = useCallback(() => {
     const container = canvasContainerRef.current;
@@ -2104,7 +2130,7 @@ export default function Canvas() {
       customHeight
     );
     const artboardWidth = resolvedWidth;
-    const artboardHeight = viewportClip ? resolvedHeight : 550;
+    const artboardHeight = resolvedHeight;
 
     const pageX = 160 + idx * (artboardWidth + 120) + artboardWidth / 2;
     const pageY = 160 + artboardHeight / 2;
@@ -2113,7 +2139,7 @@ export default function Canvas() {
       x: rect.width / 2 - pageX * zoom,
       y: rect.height / 2 - pageY * zoom,
     });
-  }, [canvasBreakpoint, customWidth, customHeight, viewportClip, zoom, pages, activePageId, isolatedPageId]);
+  }, [canvasBreakpoint, customWidth, customHeight, zoom, pages, activePageId, isolatedPageId]);
 
   const centerArtboardRef = useRef(centerArtboard);
   useEffect(() => {
@@ -2726,11 +2752,7 @@ export default function Canvas() {
                     boxShadow: "none",
                     display: "flex",
                     flexDirection: "column",
-                    minHeight: viewportClip
-                      ? `${simulatedHeight}px`
-                      : hasElements
-                        ? "0px"
-                        : "550px",
+                    minHeight: `${simulatedHeight}px`,
                     height: viewportClip
                       ? `${simulatedHeight}px`
                       : "auto",
@@ -2745,9 +2767,10 @@ export default function Canvas() {
                     position: "relative",
                     cursor: "default",
                     overflowX: viewportClip ? "auto" : "visible",
-                    border: pg.id === activePageId ? "1px solid rgba(13,153,255,0.45)" : "1px dashed rgba(255,255,255,0.08)",
-                    outline: pg.id === activePageId ? "4px solid rgba(13,153,255,0.08)" : "none",
-                    outlineOffset: "2px",
+                    boxSizing: "border-box",
+                    border: "none",
+                    outline: pg.id === activePageId ? "1px solid rgba(13,153,255,0.6)" : "1px dashed rgba(255,255,255,0.15)",
+                    outlineOffset: "-1px",
                     backgroundImage: viewportClip
                       ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 8px, transparent 8px, transparent 16px)"
                       : "none",
