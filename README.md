@@ -2,7 +2,7 @@
 
 A professional Visual Website Builder for modern web development. Build layouts visually and export clean, production-ready React + Tailwind CSS code instantly.
 
-![Layoutica Banner](https://images.unsplash.com/photo-1558655146-d09347e92766?q=80&w=2000&auto=format&fit=crop)
+## Features
 
 ### Visual Design Canvas (Frontend)
 - Figma-inspired Editor: A high-performance canvas to design layouts with precision.
@@ -23,34 +23,32 @@ A professional Visual Website Builder for modern web development. Build layouts 
 - Workspace Sync: Files are written directly to your VS Code workspace in real-time as you design.
 - Dual-Canvas Persistence: Generates clean `workspace.json` (for backend engines) and saves full UI states to `layout.json` (backend) and `ui_layout.json` (frontend).
 - Zero-Config Hydration: Instantly resumes and hydrates project states from JSON files on VS Code reload, bypassing configuration prompts.
-- Undo/Redo & Shortcuts: Robust 50-step history and canvas duplicate shortcuts.
+- Undo/Redo & Shortcuts: Robust 50-step history tracking only essential changes (ignoring minor layout drags) and canvas duplicate shortcuts.
 
 ## Tech Stack
 
-- Framework: [Next.js 16](https://nextjs.org/) (App Router)
-- State Management: [Zustand](https://zustand-demo.pmnd.rs/)
-- Styling: [Tailwind CSS 4](https://tailwindcss.com/)
-- Icons: [Lucide React](https://lucide.dev/)
-- Animations: [GSAP](https://gsap.com/)
-- Programming: [TypeScript](https://www.typescriptlang.org/)
+- Framework: Next.js 16 (App Router)
+- State Management: Zustand
+- Styling: Tailwind CSS 4
+- Icons: Lucide React
+- Animations: GSAP
+- Programming: TypeScript
 
 ## Getting Started
 
-### 1. Clone & Install
-
+1. Clone & Install
 ```bash
 git clone https://github.com/your-username/layoutica.git
 cd layoutica
 npm install
 ```
 
-### 2. Launch Development Server
-
+2. Launch Development Server
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to start building.
+Open http://localhost:3000 with your browser to start building.
 
 ## How to Use
 
@@ -62,4 +60,4 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to start b
 
 ---
 
-Built by [Jaadu](https://github.com/jaadu611)
+Built by Jaadu

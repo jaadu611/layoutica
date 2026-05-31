@@ -56,7 +56,9 @@ export default function BackendCanvas() {
     activeGhostNodes,
     toggleGhostNode,
     antennaMenuNodeId,
-    openAntennaMenu
+    openAntennaMenu,
+    organizeWorkspaceGrid,
+    sync
   } = useBackendStore();
   
   const { showGrid } = useBuilderStore();
@@ -74,7 +76,7 @@ export default function BackendCanvas() {
 
   const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
   const [isOrphanPanelOpen, setIsOrphanPanelOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string; folderName?: string } | null>(null);
   const [colorPickerState, setColorPickerState] = useState<{ nodeId: string; x: number; y: number } | null>(null);
 
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
@@ -85,6 +87,173 @@ export default function BackendCanvas() {
   const [connectionSearchPos, setConnectionSearchPos] = useState({ x: 0, y: 0 });
 
   const [antennaSearchQuery, setAntennaSearchQuery] = useState("");
+
+  const [clipboard, setClipboard] = useState<{
+    action: 'copy' | 'cut';
+    itemType: 'file' | 'folder';
+    itemId: string;
+    name: string;
+  } | null>(null);
+
+  const deleteFolder = useCallback((folderName: string) => {
+    const prefix = activeFolderPath ? `${activeFolderPath}/${folderName}` : folderName;
+    const targets = nodes.filter(n => n.path === prefix || n.path.startsWith(prefix + "/"));
+    targets.forEach(t => deleteNode(t.id));
+  }, [nodes, activeFolderPath, deleteNode]);
+
+  const duplicateFolder = useCallback((folderName: string) => {
+    const prefix = activeFolderPath ? `${activeFolderPath}/${folderName}` : folderName;
+    const folderNodes = nodes.filter(n => n.path === prefix || n.path.startsWith(prefix + "/"));
+    
+    let index = 1;
+    let newFolderName = `${folderName}_copy`;
+    const folderExists = () => {
+      const checkPrefix = activeFolderPath ? `${activeFolderPath}/${newFolderName}` : newFolderName;
+      return nodes.some(n => n.path === checkPrefix || n.path.startsWith(checkPrefix + "/"));
+    };
+    while (folderExists()) {
+      index++;
+      newFolderName = `${folderName}_copy_${index}`;
+    }
+    const newPrefix = activeFolderPath ? `${activeFolderPath}/${newFolderName}` : newFolderName;
+
+    folderNodes.forEach(node => {
+      const relativePath = node.path.slice(prefix.length);
+      const computedPath = newPrefix + relativePath;
+      const { id, ...cleanNode } = node;
+      addNode({
+        ...cleanNode,
+        path: computedPath,
+        x: node.x + 40,
+        y: node.y + 40,
+        isExpanded: false
+      });
+    });
+  }, [nodes, activeFolderPath, addNode]);
+
+  const handlePaste = useCallback(() => {
+    if (!clipboard) return;
+    const { action, itemType, itemId, name } = clipboard;
+
+    if (itemType === 'file') {
+      const sourceNode = nodes.find(n => n.id === itemId);
+      if (!sourceNode) return;
+
+      if (action === 'cut') {
+        updateNode(sourceNode.id, { path: activeFolderPath });
+        setClipboard(null);
+      } else {
+        let newName = sourceNode.name;
+        let index = 1;
+        while (nodes.some(n => n.path === activeFolderPath && n.name === (index === 1 ? newName : `${newName}_${index}`))) {
+          index++;
+        }
+        const finalName = index === 1 ? newName : `${newName}_${index}`;
+        const { id, ...cleanNode } = sourceNode;
+        addNode({
+          ...cleanNode,
+          name: finalName,
+          path: activeFolderPath,
+          x: sourceNode.x + 40,
+          y: sourceNode.y + 40,
+          isExpanded: false
+        });
+      }
+    } else if (itemType === 'folder') {
+      const folderNodes = nodes.filter(n => n.path === itemId || n.path.startsWith(itemId + "/"));
+      
+      if (action === 'cut') {
+        getVsCodeApi()?.postMessage({
+          type: "renameFolder",
+          payload: { oldName: name, activeFolderPath: activeFolderPath }
+        });
+        const newPrefix = activeFolderPath ? `${activeFolderPath}/${name}` : name;
+        const updatedNodes = nodes.map(n => {
+          if (n.path === itemId) {
+            return { ...n, path: newPrefix };
+          } else if (n.path.startsWith(itemId + "/")) {
+            return { ...n, path: newPrefix + n.path.slice(itemId.length) };
+          }
+          return n;
+        });
+        updatedNodes.forEach(n => {
+          if (n.path !== nodes.find(orig => orig.id === n.id)?.path) {
+            updateNode(n.id, { path: n.path });
+          }
+        });
+        setClipboard(null);
+      } else {
+        let newFolderName = name;
+        let index = 1;
+        const oldPrefix = itemId;
+        const folderExists = () => {
+          const checkPrefix = activeFolderPath ? `${activeFolderPath}/${newFolderName}` : newFolderName;
+          return nodes.some(n => n.path === checkPrefix || n.path.startsWith(checkPrefix + "/"));
+        };
+        while (folderExists()) {
+          index++;
+          newFolderName = `${name}_${index}`;
+        }
+        const newPrefix = activeFolderPath ? `${activeFolderPath}/${newFolderName}` : newFolderName;
+
+        folderNodes.forEach(node => {
+          const relativePath = node.path.slice(oldPrefix.length);
+          const computedPath = newPrefix + relativePath;
+          const { id, ...cleanNode } = node;
+          addNode({
+            ...cleanNode,
+            path: computedPath,
+            x: node.x + 40,
+            y: node.y + 40,
+            isExpanded: false
+          });
+        });
+      }
+    }
+  }, [clipboard, nodes, activeFolderPath, updateNode, addNode]);
+
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+
+  const handleFolderMouseDown = (e: React.MouseEvent, folder: { id: string, name: string, x: number, y: number }) => {
+    const target = e.target as HTMLElement;
+    if (target.closest(".action-button")) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setSelectedFolderId(folder.id);
+    selectNode(null);
+    setDraggedFolderId(folder.id);
+
+    const startMouseX = e.clientX;
+    const startMouseY = e.clientY;
+
+    const prefix = activeFolderPath ? `${activeFolderPath}/${folder.name}` : folder.name;
+    const folderNodes = nodes.filter(n => n.path === prefix || n.path.startsWith(prefix + "/"));
+    const initialPositions = folderNodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dx = (moveEvent.clientX - startMouseX) / zoom;
+      const dy = (moveEvent.clientY - startMouseY) / zoom;
+
+      initialPositions.forEach(pos => {
+        updateNode(pos.id, {
+          x: pos.x + dx,
+          y: pos.y + dy,
+        });
+      });
+    };
+
+    const handleMouseUp = () => {
+      setDraggedFolderId(null);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
 
   // Wheel Panning & Zooming
   const handleWheel = useCallback(
@@ -131,36 +300,6 @@ export default function BackendCanvas() {
 
   // Spacebar pan trigger state
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const activeTag = document.activeElement?.tagName;
-      const isInput = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT";
-      
-      if (e.code === "Space" && !isInput) {
-        setIsSpacePressed(true);
-      }
-
-      if ((e.code === "Delete" || e.code === "Backspace") && !isInput && selectedNodeId) {
-        deleteNode(selectedNodeId);
-      }
-
-      if (e.code === "KeyD" && (e.ctrlKey || e.metaKey) && !isInput && selectedNodeId) {
-        e.preventDefault();
-        duplicateNode(selectedNodeId);
-      }
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        setIsSpacePressed(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, [selectedNodeId, deleteNode, duplicateNode]);
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     const isLeftClickOnEmptySpace = e.button === 0 && e.target === e.currentTarget;
@@ -173,6 +312,8 @@ export default function BackendCanvas() {
       setIsDraggingPan(true);
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       dragStartPanRef.current = { ...pan };
+      selectNode(null);
+      setSelectedFolderId(null);
     } else {
       if (isGlobalSearchOpen) setIsGlobalSearchOpen(false);
       if (connectionSearchNodeId) setConnectionSearchNodeId(null);
@@ -309,6 +450,7 @@ export default function BackendCanvas() {
     e.preventDefault();
     e.stopPropagation();
     selectNode(node.id);
+    setSelectedFolderId(null);
     setDraggedNodeId(node.id);
     
     if (connectionSearchNodeId) setConnectionSearchNodeId(null);
@@ -368,6 +510,11 @@ export default function BackendCanvas() {
     const vf = Array.from(vfMap.values());
     return { visibleNodes: vn, virtualFolders: vf, allRenderedElements: [...vn, ...vf] };
   }, [nodes, activeFolderPath, activeGhostNodes]);
+
+  const handleOrganizeWorkspaceGrid = useCallback(() => {
+    organizeWorkspaceGrid();
+    sync();
+  }, [organizeWorkspaceGrid, sync]);
 
   const orphanNodeIds = useMemo(() => {
     const connected = new Set<string>();
@@ -438,15 +585,124 @@ export default function BackendCanvas() {
 
   // Global Search Filter
   const globalSearchResults = useMemo(() => {
-    if (!globalSearchQuery) return [];
+    if (!globalSearchQuery) {
+      return nodes.filter(n => pinnedNodes.includes(n.id));
+    }
     return nodes.filter(n => n.name.toLowerCase().includes(globalSearchQuery.toLowerCase()) || n.path.toLowerCase().includes(globalSearchQuery.toLowerCase()));
-  }, [nodes, globalSearchQuery]);
+  }, [nodes, globalSearchQuery, pinnedNodes]);
   
   const connectionSearchResults = useMemo(() => {
     const base = nodes.filter(n => n.id !== connectionSearchNodeId);
     if (!connectionSearchQuery) return base;
     return base.filter(n => n.name.toLowerCase().includes(connectionSearchQuery.toLowerCase()) || n.path.toLowerCase().includes(connectionSearchQuery.toLowerCase()));
   }, [nodes, connectionSearchQuery, connectionSearchNodeId]);
+
+  // Update handleKeyDown to capture Escape, Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+D
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName;
+      const isInput = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT";
+      
+      if (e.key === "Escape") {
+        let handled = false;
+        if (isGlobalSearchOpen) {
+          e.preventDefault();
+          setIsGlobalSearchOpen(false);
+          handled = true;
+        }
+        if (connectionSearchNodeId) {
+          e.preventDefault();
+          setConnectionSearchNodeId(null);
+          handled = true;
+        }
+        if (antennaMenuNodeId) {
+          e.preventDefault();
+          openAntennaMenu(null);
+          handled = true;
+        }
+        if (handled) return;
+      }
+
+      if (isGlobalSearchOpen) return;
+
+      if (e.code === "Space" && !isInput) {
+        setIsSpacePressed(true);
+      }
+
+      if ((e.code === "Delete" || e.code === "Backspace") && !isInput) {
+        if (selectedNodeId) {
+          deleteNode(selectedNodeId);
+        } else if (selectedFolderId) {
+          const folderName = selectedFolderId.replace("folder-", "");
+          if (confirm(`Are you sure you want to delete folder "${folderName}" and all of its files?`)) {
+            deleteFolder(folderName);
+            setSelectedFolderId(null);
+          }
+        }
+      }
+
+      // Copy
+      if ((e.key === "c" || e.key === "C") && (e.ctrlKey || e.metaKey) && !isInput) {
+        if (selectedNodeId) {
+          const node = nodes.find(n => n.id === selectedNodeId);
+          if (node) {
+            e.preventDefault();
+            setClipboard({ action: 'copy', itemType: 'file', itemId: selectedNodeId, name: node.name });
+          }
+        } else if (selectedFolderId) {
+          const folderName = selectedFolderId.replace("folder-", "");
+          e.preventDefault();
+          const prefix = activeFolderPath ? `${activeFolderPath}/${folderName}` : folderName;
+          setClipboard({ action: 'copy', itemType: 'folder', itemId: prefix, name: folderName });
+        }
+      }
+
+      // Cut
+      if ((e.key === "x" || e.key === "X") && (e.ctrlKey || e.metaKey) && !isInput) {
+        if (selectedNodeId) {
+          const node = nodes.find(n => n.id === selectedNodeId);
+          if (node) {
+            e.preventDefault();
+            setClipboard({ action: 'cut', itemType: 'file', itemId: selectedNodeId, name: node.name });
+          }
+        } else if (selectedFolderId) {
+          const folderName = selectedFolderId.replace("folder-", "");
+          e.preventDefault();
+          const prefix = activeFolderPath ? `${activeFolderPath}/${folderName}` : folderName;
+          setClipboard({ action: 'cut', itemType: 'folder', itemId: prefix, name: folderName });
+        }
+      }
+
+      // Paste
+      if ((e.key === "v" || e.key === "V") && (e.ctrlKey || e.metaKey) && !isInput) {
+        e.preventDefault();
+        handlePaste();
+      }
+
+      // Duplicate
+      if ((e.key === "d" || e.key === "D") && (e.ctrlKey || e.metaKey) && !isInput) {
+        if (selectedNodeId) {
+          e.preventDefault();
+          duplicateNode(selectedNodeId);
+        } else if (selectedFolderId) {
+          const folderName = selectedFolderId.replace("folder-", "");
+          e.preventDefault();
+          duplicateFolder(folderName);
+        }
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        setIsSpacePressed(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [selectedNodeId, deleteNode, duplicateNode, isGlobalSearchOpen, selectedFolderId, deleteFolder, clipboard, nodes, activeFolderPath, duplicateFolder, handlePaste, connectionSearchNodeId, antennaMenuNodeId, openAntennaMenu]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0c0c0e]">
@@ -473,50 +729,61 @@ export default function BackendCanvas() {
           ))}
         </div>
 
-        {/* Global Search Button */}
-        <div className="relative">
-          <button 
-            onClick={() => setIsGlobalSearchOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-white/40 hover:text-white hover:border-zinc-700 transition-colors text-xs"
+        {/* Global Search and Clean Layout controls */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleOrganizeWorkspaceGrid}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-white/60 hover:text-white hover:border-zinc-700 transition-colors text-xs font-medium cursor-pointer"
+            title="Clean Layout (Topological Connection-based Grid Layout)"
           >
-            <Search size={14} />
-            <span>Search workspace...</span>
-            <kbd className="ml-4 font-sans text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-white/30">⌘K</kbd>
+            <Route size={13} className="text-violet-400" />
+            <span>Clean Layout</span>
           </button>
 
-          {isGlobalSearchOpen && (
-            <div className="absolute top-10 right-0 w-[320px] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-2">
-              <div className="flex items-center gap-2 px-2 pb-2 border-b border-white/5">
-                <Search size={14} className="text-white/40" />
-                <input 
-                  autoFocus
-                  type="text" 
-                  value={globalSearchQuery}
-                  onChange={e => setGlobalSearchQuery(e.target.value)}
-                  placeholder="Find files or folders..."
-                  className="flex-1 bg-transparent text-xs text-white placeholder-white/20 outline-none"
-                />
-                <button onClick={() => setIsGlobalSearchOpen(false)} className="text-white/40 hover:text-white">
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="flex flex-col max-h-[300px] overflow-y-auto">
-                {globalSearchResults.map(res => (
-                  <button 
-                    key={res.id} 
-                    onClick={() => executeGlobalSearch(res.id)}
-                    className="flex flex-col items-start px-2 py-2 hover:bg-white/5 rounded-lg text-left"
-                  >
-                    <span className="text-xs text-white">{res.name}.{res.extension}</span>
-                    <span className="text-[10px] text-white/40">{res.path || "root"}</span>
+          <div className="relative">
+            <button 
+              onClick={() => setIsGlobalSearchOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-white/40 hover:text-white hover:border-zinc-700 transition-colors text-xs"
+            >
+              <Search size={14} />
+              <span>Search workspace...</span>
+              <kbd className="ml-4 font-sans text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-white/30">⌘K</kbd>
+            </button>
+
+            {isGlobalSearchOpen && (
+              <div className="absolute top-10 right-0 w-[320px] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-2 pb-2 border-b border-white/5">
+                  <Search size={14} className="text-white/40" />
+                  <input 
+                    autoFocus
+                    type="text" 
+                    value={globalSearchQuery}
+                    onChange={e => setGlobalSearchQuery(e.target.value)}
+                    placeholder="Find files or folders..."
+                    className="flex-1 bg-transparent text-xs text-white placeholder-white/20 outline-none"
+                  />
+                  <button onClick={() => setIsGlobalSearchOpen(false)} className="text-white/40 hover:text-white">
+                    <X size={14} />
                   </button>
-                ))}
-                {globalSearchQuery && globalSearchResults.length === 0 && (
-                  <div className="px-2 py-4 text-center text-xs text-white/40">No results found</div>
-                )}
+                </div>
+                <div className="flex flex-col max-h-[300px] overflow-y-auto">
+                  {globalSearchResults.map(res => (
+                    <button 
+                      key={res.id} 
+                      onClick={() => executeGlobalSearch(res.id)}
+                      className="flex flex-col items-start px-2 py-2 hover:bg-white/5 rounded-lg text-left"
+                    >
+                      <span className="text-xs text-white">{res.name}.{res.extension}</span>
+                      <span className="text-[10px] text-white/40">{res.path || "root"}</span>
+                    </button>
+                  ))}
+                  {globalSearchQuery && globalSearchResults.length === 0 && (
+                    <div className="px-2 py-4 text-center text-xs text-white/40">No results found</div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -535,7 +802,7 @@ export default function BackendCanvas() {
           backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
           backgroundPosition: `${pan.x}px ${pan.y}px`,
         }}
-        onClick={() => selectNode(null)}
+        onClick={() => { selectNode(null); setSelectedFolderId(null); }}
       >
         {allRenderedElements.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-6 z-0">
@@ -629,34 +896,51 @@ export default function BackendCanvas() {
           </svg>
 
           {/* Virtual Folders */}
-          {virtualFolders.map((folder) => (
-            <div
-              key={folder.id}
-              data-node-id={folder.id}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                navigateToFolder(activeFolderPath ? `${activeFolderPath}/${folder.name}` : folder.name);
-              }}
-              className="absolute w-[180px] rounded-xl pointer-events-auto border flex flex-col bg-zinc-900 border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800 transition-colors cursor-pointer shadow-lg"
-              style={{
-                left: folder.x,
-                top: folder.y,
-                zIndex: 10,
-              }}
-            >
-              <div className="flex items-center gap-3 p-3">
-                <div className="p-2 rounded bg-zinc-800 text-blue-400">
-                  <Folder size={18} fill="currentColor" className="opacity-50" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-semibold text-white truncate">
-                    {folder.name}
-                  </span>
-                  <span className="text-[9px] text-white/40">{folder.count} {folder.count === 1 ? "file" : "files"}</span>
+          {virtualFolders.map((folder) => {
+            const isCut = clipboard?.action === 'cut' && clipboard.itemType === 'folder' && clipboard.itemId === (activeFolderPath ? `${activeFolderPath}/${folder.name}` : folder.name);
+            return (
+              <div
+                key={folder.id}
+                data-node-id={folder.id}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  navigateToFolder(activeFolderPath ? `${activeFolderPath}/${folder.name}` : folder.name);
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedFolderId(folder.id);
+                  selectNode(null);
+                }}
+                onMouseDown={(e) => handleFolderMouseDown(e, folder)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setContextMenu({ x: e.clientX, y: e.clientY, folderName: folder.name });
+                }}
+                className={`absolute w-[180px] rounded-xl pointer-events-auto border flex flex-col bg-zinc-900 transition-colors shadow-lg ${
+                  selectedFolderId === folder.id ? "border-zinc-400 ring-1 ring-zinc-400/20" : isCut ? "border-dashed border-zinc-600 opacity-40" : "border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800"
+                }`}
+                style={{
+                  left: folder.x,
+                  top: folder.y,
+                  zIndex: 10,
+                  cursor: draggedFolderId === folder.id ? "grabbing" : "grab",
+                }}
+              >
+                <div className="flex items-center gap-3 p-3">
+                  <div className="p-2 rounded bg-zinc-800 text-blue-400">
+                    <Folder size={18} fill="currentColor" className="opacity-50" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-semibold text-white truncate">
+                      {folder.name}
+                    </span>
+                    <span className="text-[9px] text-white/40">{folder.count} {folder.count === 1 ? "file" : "files"}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Real Files */}
           {visibleNodes.map((node) => {
@@ -664,6 +948,7 @@ export default function BackendCanvas() {
             const isExpanded = !!node.isExpanded;
             const isPinned = pinnedNodes.includes(node.id);
             const isOrphan = orphanNodeIds.includes(node.id);
+            const isCut = clipboard?.action === 'cut' && clipboard.itemType === 'file' && clipboard.itemId === node.id;
             
             const outgoingExt = connections.filter(c => c.sourceId === node.id && !visibleNodes.find(n => n.id === c.targetId));
             const incomingExt = connections.filter(c => c.targetId === node.id && !visibleNodes.find(n => n.id === c.sourceId));
@@ -686,7 +971,7 @@ export default function BackendCanvas() {
                 onMouseDown={(e) => handleNodeMouseDown(e, node)}
                 className={`absolute w-[280px] rounded-xl pointer-events-auto border flex flex-col bg-zinc-900 transition-shadow ${
                   isSelected && !node.color ? "border-zinc-400 ring-1 ring-zinc-400/20 shadow-xl" : !node.color ? "border-zinc-800 shadow-xl" : "shadow-xl"
-                } ${isGhost ? 'opacity-95 ring-1 ring-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.15)]' : ''} ${isOrphan && !isGhost && !node.color ? 'ring-1 ring-amber-500/40' : ''}`}
+                } ${isGhost ? 'opacity-95 ring-1 ring-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.15)]' : ''} ${isOrphan && !isGhost && !node.color ? 'ring-1 ring-amber-500/40' : ''} ${isCut ? 'opacity-40 border-dashed border-zinc-600' : ''}`}
                 style={{
                   left: node.x,
                   top: node.y,
@@ -697,6 +982,7 @@ export default function BackendCanvas() {
                 onClick={(e) => {
                   e.stopPropagation();
                   selectNode(node.id);
+                  setSelectedFolderId(null);
                   if (contextMenu) setContextMenu(null);
                 }}
                 onContextMenu={(e) => {
@@ -711,7 +997,6 @@ export default function BackendCanvas() {
                   className="connection-handle action-button absolute -right-2 top-3.5 w-4 h-4 bg-zinc-900 border border-zinc-700 rounded-sm flex items-center justify-center cursor-pointer hover:bg-zinc-800 hover:border-zinc-500 transition-colors z-50 text-white/30 hover:text-white/80"
                   onClick={(e) => {
                     e.stopPropagation();
-                    // Open connect search overlay right next to the handle
                     setConnectionSearchNodeId(node.id);
                     setConnectionSearchPos({ x: node.x + 290, y: node.y });
                     setConnectionSearchQuery("");
@@ -850,7 +1135,7 @@ export default function BackendCanvas() {
                   </div>
                 )}
 
-                {/* Connection Search Overlay (anchored to node) */}
+                {/* Connection Search Overlay */}
                 {connectionSearchNodeId === node.id && (
                   <div 
                     className="absolute z-[100] w-[260px] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-2 flex flex-col gap-2"
@@ -858,7 +1143,12 @@ export default function BackendCanvas() {
                     onClick={e => e.stopPropagation()}
                     onMouseDown={e => e.stopPropagation()}
                   >
-                    <div className="text-[10px] uppercase font-bold text-white/40 px-1">Connect to...</div>
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[10px] uppercase font-bold text-white/40">Connect to...</span>
+                      <button onClick={() => setConnectionSearchNodeId(null)} className="text-white/40 hover:text-white transition-colors cursor-pointer">
+                        <X size={12} />
+                      </button>
+                    </div>
                     <div className="flex items-center gap-2 px-2 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg">
                       <Search size={12} className="text-white/40" />
                       <input 
@@ -879,7 +1169,7 @@ export default function BackendCanvas() {
                             addConnection(node.id, res.id);
                             setConnectionSearchNodeId(null);
                           }}
-                          className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded-lg text-left transition-colors"
+                          className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded-lg text-left transition-colors cursor-pointer"
                         >
                           <LinkIcon size={12} className="text-white/20" />
                           <div className="flex flex-col min-w-0">
@@ -969,25 +1259,25 @@ export default function BackendCanvas() {
 
         {/* Pinned Nodes Dock */}
         {pinnedNodesData.length > 0 && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 rounded-2xl p-2 shadow-2xl flex items-center gap-2 pointer-events-auto select-none">
-            <div className="px-3 flex items-center gap-1.5 text-blue-400/80 border-r border-white/10">
-              <Pin size={12} fill="currentColor" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Dock</span>
+          <div className="absolute bottom-6 left-1/2 -translate-x-[55%] z-40 bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 rounded-xl p-1 shadow-2xl flex items-center gap-1.5 pointer-events-auto select-none max-w-[60vw]">
+            <div className="pl-2 pr-1.5 flex items-center gap-1 text-blue-400/80 border-r border-white/10 shrink-0">
+              <Pin size={10} fill="currentColor" />
+              <span className="text-[9px] font-bold uppercase tracking-wider">Dock</span>
             </div>
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-[500px]">
+            <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-w-full py-0.5">
               {pinnedNodesData.map(node => {
                 const isActiveGhost = activeGhostNodes.includes(node.id);
                 return (
                   <button
                     key={node.id}
                     onClick={() => toggleGhostNode(node.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium whitespace-nowrap transition-colors ${
+                    className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-medium whitespace-nowrap transition-colors ${
                       isActiveGhost 
                         ? 'bg-purple-500/10 border-purple-500/30 text-purple-300' 
                         : 'bg-zinc-800 border-zinc-700 text-white/70 hover:bg-zinc-700 hover:text-white'
                     }`}
                   >
-                    <FileCode size={12} className={isActiveGhost ? "text-purple-400" : "opacity-50"} />
+                    <FileCode size={10} className={isActiveGhost ? "text-purple-400" : "opacity-50"} />
                     {node.name}.{node.extension}
                   </button>
                 );
@@ -1003,40 +1293,171 @@ export default function BackendCanvas() {
             onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
           >
             <div
-              className="fixed bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl py-1 min-w-[160px] select-none"
+              className="fixed bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl py-1 min-w-[180px] select-none"
               style={{ left: contextMenu.x, top: contextMenu.y }}
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <button
-                onClick={() => { duplicateNode(contextMenu.nodeId); setContextMenu(null); }}
-                className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <CopyPlus size={12} className="text-white/40" />
-                  <span>Duplicate</span>
-                </div>
-                <kbd className="text-[9px] text-white/25 font-mono">Ctrl+D</kbd>
-              </button>
-              <button
-                onClick={() => { deleteNode(contextMenu.nodeId); setContextMenu(null); }}
-                className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-red-400/80 hover:bg-white/5 transition-colors text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <Trash2 size={12} />
-                  <span>Delete</span>
-                </div>
-                <kbd className="text-[9px] text-white/25 font-mono">Del</kbd>
-              </button>
-              {nodes.find(n => n.id === contextMenu.nodeId)?.color && (
+              {(contextMenu as any).folderName ? (
                 <>
-                  <div className="border-t border-white/5 my-1" />
                   <button
-                    onClick={() => { updateNode(contextMenu.nodeId, { color: undefined }); setContextMenu(null); }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-white/50 hover:bg-white/5 transition-colors text-left"
+                    onClick={() => {
+                      getVsCodeApi()?.postMessage({
+                        type: "renameFolder",
+                        payload: { oldName: (contextMenu as any).folderName, activeFolderPath }
+                      });
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
                   >
-                    <Palette size={12} />
-                    <span>Clear color</span>
+                    <Settings size={12} className="text-white/40" />
+                    <span>Rename Folder</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const prefix = activeFolderPath ? `${activeFolderPath}/${(contextMenu as any).folderName}` : (contextMenu as any).folderName;
+                      setClipboard({ action: 'copy', itemType: 'folder', itemId: prefix, name: (contextMenu as any).folderName });
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CopyPlus size={12} className="text-white/40" />
+                      <span>Copy Folder</span>
+                    </div>
+                    <kbd className="text-[9px] text-white/25 font-mono">Ctrl+C</kbd>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const prefix = activeFolderPath ? `${activeFolderPath}/${(contextMenu as any).folderName}` : (contextMenu as any).folderName;
+                      setClipboard({ action: 'cut', itemType: 'folder', itemId: prefix, name: (contextMenu as any).folderName });
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Ghost size={12} className="text-white/40" />
+                      <span>Cut Folder</span>
+                    </div>
+                    <kbd className="text-[9px] text-white/25 font-mono">Ctrl+X</kbd>
+                  </button>
+                  <button
+                    onClick={() => {
+                      duplicateFolder((contextMenu as any).folderName);
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CopyPlus size={12} className="text-white/40" />
+                      <span>Duplicate Folder</span>
+                    </div>
+                    <kbd className="text-[9px] text-white/25 font-mono">Ctrl+D</kbd>
+                  </button>
+                  <div className="my-1 border-t border-white/5" />
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete folder "${(contextMenu as any).folderName}" and all its contents?`)) {
+                        deleteFolder((contextMenu as any).folderName);
+                      }
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <Trash2 size={12} />
+                    <span>Delete Folder</span>
+                  </button>
+                </>
+              ) : contextMenu.nodeId ? (
+                <>
+                  <button
+                    onClick={() => {
+                      const node = nodes.find(n => n.id === contextMenu.nodeId);
+                      if (node) {
+                        getVsCodeApi()?.postMessage({
+                          type: "renameNode",
+                          payload: { nodeId: contextMenu.nodeId, oldName: node.name }
+                        });
+                      }
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <Settings size={12} className="text-white/40" />
+                    <span>Rename File</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const node = nodes.find(n => n.id === contextMenu.nodeId);
+                      if (node) {
+                        setClipboard({ action: 'copy', itemType: 'file', itemId: node.id, name: node.name });
+                      }
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CopyPlus size={12} className="text-white/40" />
+                      <span>Copy File</span>
+                    </div>
+                    <kbd className="text-[9px] text-white/25 font-mono">Ctrl+C</kbd>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const node = nodes.find(n => n.id === contextMenu.nodeId);
+                      if (node) {
+                        setClipboard({ action: 'cut', itemType: 'file', itemId: node.id, name: node.name });
+                      }
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Ghost size={12} className="text-white/40" />
+                      <span>Cut File</span>
+                    </div>
+                    <kbd className="text-[9px] text-white/25 font-mono">Ctrl+X</kbd>
+                  </button>
+
+                  <button
+                    onClick={() => { duplicateNode(contextMenu.nodeId!); setContextMenu(null); }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-white/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CopyPlus size={12} className="text-white/40" />
+                      <span>Duplicate</span>
+                    </div>
+                    <kbd className="text-[9px] text-white/25 font-mono">Ctrl+D</kbd>
+                  </button>
+                  
+                  <div className="my-1 border-t border-white/5" />
+                  <button
+                    onClick={() => { deleteNode(contextMenu.nodeId!); setContextMenu(null); }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-red-400/80 hover:bg-white/5 transition-colors text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Trash2 size={12} />
+                      <span>Delete</span>
+                    </div>
+                    <kbd className="text-[9px] text-white/25 font-mono">Del</kbd>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    disabled={!clipboard}
+                    onClick={() => { handlePaste(); setContextMenu(null); }}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-1.5 text-xs transition-colors text-left cursor-pointer ${
+                      clipboard ? 'text-white/80 hover:bg-white/5' : 'text-white/20 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <CopyPlus size={12} className="text-white/40" />
+                      <span>Paste</span>
+                    </div>
+                    <kbd className="text-[9px] text-white/25 font-mono">Ctrl+V</kbd>
                   </button>
                 </>
               )}
@@ -1064,14 +1485,25 @@ export default function BackendCanvas() {
                 <div className="text-[9px] uppercase font-bold text-white/30 px-1 pb-1 border-b border-white/5">Unconnected files</div>
                 <div className="flex flex-col max-h-[200px] overflow-y-auto">
                   {orphanNodes.map(n => (
-                    <button
-                      key={n.id}
-                      onClick={() => { navigateToFolder(n.path); selectNode(n.id); setIsOrphanPanelOpen(false); }}
-                      className="flex flex-col items-start px-2 py-1.5 hover:bg-white/5 rounded-lg text-left transition-colors"
-                    >
-                      <span className="text-xs text-amber-300/90 truncate w-full">{n.name}.{n.extension}</span>
-                      <span className="text-[9px] text-white/30 truncate w-full">{n.path || "root"}</span>
-                    </button>
+                    <div key={n.id} className="flex items-center group">
+                      <button
+                        onClick={() => { navigateToFolder(n.path); selectNode(n.id); setIsOrphanPanelOpen(false); }}
+                        className="flex flex-col items-start px-2 py-1.5 hover:bg-white/5 rounded-l-lg text-left transition-colors flex-1 min-w-0"
+                      >
+                        <span className="text-xs text-amber-300/90 truncate w-full">{n.name}.{n.extension}</span>
+                        <span className="text-[9px] text-white/30 truncate w-full">{n.path || "root"}</span>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNode(n.id);
+                        }}
+                        className="px-2 py-1.5 opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 hover:bg-white/5 rounded-r-lg transition-all h-full"
+                        title="Delete Orphan"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1079,7 +1511,7 @@ export default function BackendCanvas() {
           </div>
         )}
 
-        {/* Custom Color Picker Popover (outside transform layer) */}
+        {/* Custom Color Picker Popover */}
         {colorPickerState && createPortal((() => {
           const pickerNode = nodes.find(n => n.id === colorPickerState.nodeId);
           const currentColor = pickerNode?.color || "";
@@ -1185,6 +1617,19 @@ export default function BackendCanvas() {
           </button>
         </div>
       </div>
+
+      {clipboard?.action === 'cut' && (
+        <div className="fixed bottom-4 left-4 z-[100] bg-red-950/90 border border-red-500/30 px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs text-red-200 animate-bounce pointer-events-auto">
+          <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+          <span>Actively Cut: <strong className="font-semibold text-white font-mono">{clipboard.name}</strong></span>
+          <button 
+            onClick={() => setClipboard(null)} 
+            className="ml-1 text-red-400 hover:text-white p-0.5 rounded transition-colors"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

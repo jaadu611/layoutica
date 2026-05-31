@@ -24,20 +24,54 @@
   --active-bg: rgba(255, 255, 255, 0.08);
 }
 
-/* Standard custom scrollbar style for all scrollable containers in layoutica */
+/* Custom scrollbar rules with high specificity for all containers */
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-auto::-webkit-scrollbar,
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 2px !important;
+  height: 2px !important;
 }
+.overflow-y-auto::-webkit-scrollbar-button,
+.overflow-auto::-webkit-scrollbar-button,
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb,
+.overflow-auto::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-radius: 2px !important;
 }
+.overflow-y-auto::-webkit-scrollbar-thumb:hover,
+.overflow-auto::-webkit-scrollbar-thumb:hover,
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.25) !important;
 }
+.overflow-y-auto::-webkit-scrollbar-track,
+.overflow-auto::-webkit-scrollbar-track,
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: transparent !important;
+}
+
+/* Firefox scrollbar compatibility styling */
+.overflow-y-auto,
+.overflow-auto,
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent !important;
+}
+
+/* Element separation outline styling using color inversion (difference blend mode) */
+[data-show-sep="true"]::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  mix-blend-mode: difference !important;
+  z-index: 9999 !important;
 }
 
 @keyframes bounce {
@@ -56,12 +90,12 @@
 
 [data-artboard="true"]::-webkit-scrollbar {
   display: block !important;
-  width: 6px !important;
-  height: 6px !important;
+  width: 2px !important;
+  height: 2px !important;
 }
 [data-artboard="true"]::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.18) !important;
-  border-radius: 3px !important;
+  border-radius: 2px !important;
 }
 [data-artboard="true"]::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3) !important;

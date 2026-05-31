@@ -258,15 +258,23 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       }
       return n;
     });
-    const newPast = [...past, nodes].slice(-MAX_HISTORY);
 
-    set({ 
-      nodes: newNodes,
-      past: newPast,
-      future: [],
-      undoable: true,
-      redoable: false,
-    });
+    const isImportantUpdate = Object.keys(updates).some(
+      (k) => k !== "x" && k !== "y" && k !== "isExpanded"
+    );
+
+    if (isImportantUpdate) {
+      const newPast = [...past, nodes].slice(-MAX_HISTORY);
+      set({ 
+        nodes: newNodes,
+        past: newPast,
+        future: [],
+        undoable: true,
+        redoable: false,
+      });
+    } else {
+      set({ nodes: newNodes });
+    }
 
     if (shouldNavigate) {
       navigateToFolder(newPath);
@@ -326,6 +334,116 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   selectNode: (id) => set({ selectedNodeId: id }),
 
   setNodes: (nodes) => set({ nodes }),
+
+  organizeWorkspaceGrid: () => {
+    const { nodes, activeFolderPath, updateNode, activeGhostNodes, connections } = get();
+    const activeNodes = nodes.filter(n => n.path === activeFolderPath);
+    if (activeNodes.length === 0) return;
+
+    // Build adjacency list for topological layout based on connections
+    const adj = new Map<string, string[]>();
+    const inDegree = new Map<string, number>();
+    const nodeMap = new Map<string, BackendFileNode>();
+
+    activeNodes.forEach(n => {
+      adj.set(n.id, []);
+      inDegree.set(n.id, 0);
+      nodeMap.set(n.id, n);
+    });
+
+    connections.forEach(c => {
+      if (adj.has(c.sourceId) && adj.has(c.targetId)) {
+        adj.get(c.sourceId)!.push(c.targetId);
+        inDegree.set(c.targetId, (inDegree.get(c.targetId) || 0) + 1);
+      }
+    });
+
+    // Topological Sort / Kahn's algorithm to separate into layers/columns
+    const queue: string[] = [];
+    inDegree.forEach((deg, id) => {
+      if (deg === 0) queue.push(id);
+    });
+
+    const layers: string[][] = [];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const layerSize = queue.length;
+      const currentLayer: string[] = [];
+      for (let i = 0; i < layerSize; i++) {
+        const curr = queue.shift()!;
+        currentLayer.push(curr);
+        visited.add(curr);
+        const neighbors = adj.get(curr) || [];
+        neighbors.forEach(neighbor => {
+          if (!visited.has(neighbor)) {
+            inDegree.set(neighbor, inDegree.get(neighbor)! - 1);
+            if (inDegree.get(neighbor) === 0) {
+              queue.push(neighbor);
+            }
+          }
+        });
+      }
+      layers.push(currentLayer);
+    }
+
+    // Add remaining unvisited node cycles to final layers
+    const unvisited = activeNodes.filter(n => !visited.has(n.id));
+    if (unvisited.length > 0) {
+      layers.push(unvisited.map(n => n.id));
+    }
+
+    // Calculate layout columns and rows dynamically, accounting for expanded dimensions
+    // Expanded nodes take up roughly 340px vertical space, regular ones 90px. Horizontal separation is 340px.
+    let currentX = 40;
+    layers.forEach(layer => {
+      let currentY = 40;
+      let maxWidthInLayer = 300;
+      layer.forEach(nodeId => {
+        const node = nodeMap.get(nodeId);
+        if (!node) return;
+        const height = node.isExpanded ? 340 : 90;
+        updateNode(node.id, {
+          x: currentX,
+          y: currentY
+        });
+        currentY += height + 40; // Add padding margin below node
+      });
+      currentX += maxWidthInLayer + 60; // Advance column
+    });
+
+    // Arrange virtual folders at the very end as a clean sidebar/column
+    const vfMap = new Map<string, { id: string, name: string, x: number, y: number, count: number }>();
+    nodes.forEach(node => {
+      if (!activeGhostNodes.includes(node.id) && node.path.startsWith(activeFolderPath ? activeFolderPath + "/" : "") && node.path !== activeFolderPath) {
+        const remainingPath = activeFolderPath ? node.path.slice(activeFolderPath.length + 1) : node.path;
+        const parts = remainingPath.slice(0).split("/");
+        const folderName = parts[0];
+        const existing = vfMap.get(folderName);
+        if (!existing) {
+          vfMap.set(folderName, { id: `folder-${folderName}`, name: folderName, x: node.x, y: node.y, count: 1 });
+        } else {
+          existing.count += 1;
+        }
+      }
+    });
+    const virtualFolders = Array.from(vfMap.values());
+
+    let folderY = 40;
+    virtualFolders.forEach(folder => {
+      const prefix = activeFolderPath ? `${activeFolderPath}/${folder.name}` : folder.name;
+      const folderNodes = nodes.filter(n => n.path === prefix || n.path.startsWith(prefix + "/"));
+      const folderDx = currentX - folder.x;
+      const folderDy = folderY - folder.y;
+      folderNodes.forEach(fn => {
+        updateNode(fn.id, {
+          x: fn.x + folderDx,
+          y: fn.y + folderDy
+        });
+      });
+      folderY += 100; // folders height spacing
+    });
+  },
 
   sync: () => {
     syncToHost(get());
