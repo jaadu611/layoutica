@@ -34,7 +34,8 @@ import {
   CopyPlus,
   Palette,
   Maximize2,
-  AlertTriangle
+  AlertTriangle,
+  Play
 } from "lucide-react";
 
 export default function BackendCanvas() {
@@ -64,6 +65,26 @@ export default function BackendCanvas() {
   const { showGrid } = useBuilderStore();
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+
+  const [isPipelineRunning, setIsPipelineRunning] = useState(false);
+  const [pipelineProgress, setPipelineProgress] = useState<{
+    currentPhase: string;
+    currentFile: string;
+    currentTier: number;
+    log: string[];
+    stepIndex: number;
+    totalSteps: number;
+    trajectorySteps: any[];
+  }>({
+    currentPhase: "idle",
+    currentFile: "",
+    currentTier: 0,
+    log: [],
+    stepIndex: 0,
+    totalSteps: 0,
+    trajectorySteps: []
+  });
   
   // Pan and Zoom state
   const [zoom, setZoom] = useState(1.0);
@@ -374,6 +395,58 @@ export default function BackendCanvas() {
     window.addEventListener("center-on-node", handleCenterOnNode);
     return () => window.removeEventListener("center-on-node", handleCenterOnNode);
   }, [nodes]);
+
+  // Listen for pipeline updates from host
+  useEffect(() => {
+    const handlePipelineMessage = (e: MessageEvent) => {
+      const { type, payload } = e.data || {};
+      if (type === "pipelineProgressUpdate") {
+        setIsPipelineRunning(payload.currentPhase !== "complete");
+        setPipelineProgress({
+          currentPhase: payload.currentPhase,
+          currentFile: payload.currentFile,
+          currentTier: payload.currentTier,
+          log: payload.log || [],
+          stepIndex: payload.stepIndex,
+          totalSteps: payload.totalSteps,
+          trajectorySteps: payload.trajectorySteps || []
+        });
+      }
+    };
+    window.addEventListener("message", handlePipelineMessage);
+    return () => window.removeEventListener("message", handlePipelineMessage);
+  }, []);
+
+  const startPipelineDebugger = useCallback(() => {
+    if (nodes.length === 0) {
+      alert("No files/nodes on the canvas to debug!");
+      return;
+    }
+    setIsPipelineRunning(true);
+    setPipelineProgress({
+      currentPhase: "Initializing...",
+      currentFile: "",
+      currentTier: 0,
+      log: ["Requesting Antigravity background run..."],
+      stepIndex: 0,
+      totalSteps: 0,
+      trajectorySteps: []
+    });
+    getVsCodeApi()?.postMessage({
+      type: "runAIPipeline",
+      payload: { nodes, connections }
+    });
+  }, [nodes, connections]);
+
+  const stopPipelineDebugger = useCallback(() => {
+    setIsPipelineRunning(false);
+  }, []);
+
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [pipelineProgress.log, pipelineProgress.trajectorySteps]);
 
   // Handle Drag & Drop of Presets
   const handleDragOver = (e: React.DragEvent) => {
@@ -1803,7 +1876,15 @@ export default function BackendCanvas() {
           >
             <span className="text-xs font-bold font-mono">?</span>
           </button>
-
+          <div className="w-px h-4 bg-white/10 mx-0.5" />
+          <button
+            onClick={startPipelineDebugger}
+            disabled={isPipelineRunning}
+            className={`w-7 h-7 flex items-center justify-center rounded transition-colors cursor-pointer ${isPipelineRunning ? 'text-indigo-450 bg-indigo-550/15' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            title="Run AI Pipeline Debugger"
+          >
+            <Play size={12} fill={isPipelineRunning ? "currentColor" : "none"} />
+          </button>
         </div>
 
         {/* Shortcuts Cheatsheet Modal */}
@@ -1957,7 +2038,180 @@ export default function BackendCanvas() {
           </div>
         )}
 
+        {/* Pipeline Debugger Overlay */}
+        {isPipelineRunning && (
+          <div
+            className="fixed inset-0 z-[300] bg-black/45 backdrop-blur-md flex items-center justify-center pointer-events-auto animate-fade-in"
+          >
+            <div
+              className="bg-zinc-900 border border-zinc-800 rounded-xl w-[640px] p-6 flex flex-col gap-4 pointer-events-auto text-zinc-300 shadow-none"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  {pipelineProgress.currentPhase === "complete" ? (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                  ) : (
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_8px_#6366f1]" />
+                  )}
+                  <h3 className="text-sm font-bold text-zinc-200 tracking-wide uppercase">
+                    AI Pipeline Debugger (Antigravity Run)
+                  </h3>
+                </div>
+                {pipelineProgress.currentPhase === "complete" && (
+                  <button
+                    onClick={stopPipelineDebugger}
+                    className="text-zinc-400 hover:text-white hover:bg-zinc-800 p-1 rounded transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
 
+              {/* Progress Bar */}
+              <div className="flex flex-col gap-1.5 text-xs">
+                <div className="flex justify-between font-medium">
+                  <span className="text-zinc-400">
+                    {pipelineProgress.currentPhase === "complete" ? "Execution Completed" : pipelineProgress.currentPhase}
+                  </span>
+                  <span className="text-zinc-400 font-mono">
+                    {pipelineProgress.stepIndex} / {pipelineProgress.totalSteps || 1} steps
+                  </span>
+                </div>
+                <div className="w-full bg-zinc-950 border border-zinc-800/80 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-indigo-500 h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${(pipelineProgress.stepIndex / (pipelineProgress.totalSteps || 1)) * 100}%` }}
+                  />
+                </div>
+                {pipelineProgress.currentPhase !== "complete" && (
+                  <div className="flex justify-between text-[10px] text-zinc-500 mt-0.5">
+                    <span>Processing: <strong className="text-zinc-400 font-mono">{pipelineProgress.currentFile}</strong></span>
+                    <span>Tier: <strong className="text-zinc-400 font-mono">{pipelineProgress.currentTier}</strong></span>
+                  </div>
+                )}
+              </div>
+
+              {/* Antigravity Step Trajectory List */}
+              {pipelineProgress.trajectorySteps && pipelineProgress.trajectorySteps.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">Antigravity Steps</span>
+                  <div className="bg-zinc-950 border border-zinc-800/60 rounded-lg p-3 font-mono text-[9px] h-[140px] overflow-y-auto flex flex-col gap-2 text-zinc-400 select-text">
+                    {pipelineProgress.trajectorySteps.map((s: any, idx: number) => {
+                      const isWaiting = s.status === 3 || s.status === 'WAITING' || s.status === 'CASCADE_STEP_STATUS_WAITING' || s.requestedInteraction;
+                      const isDone = s.status === 2 || s.status === 'DONE' || s.status === 'CASCADE_STEP_STATUS_DONE';
+                      const isError = s.type === 'CORTEX_STEP_TYPE_ERROR_MESSAGE' || s.status === 4 || s.status === 'ERROR' || s.status === 'CASCADE_STEP_STATUS_ERROR';
+                      
+                      let statusText = "Done";
+                      let statusColor = "text-emerald-500";
+                      if (isError) {
+                        statusText = "Error";
+                        statusColor = "text-red-500";
+                      } else if (isWaiting) {
+                        statusText = "Waiting";
+                        statusColor = "text-amber-500";
+                      } else if (s.status === 1 || s.status === 'RUNNING' || s.status === 'CASCADE_STEP_STATUS_RUNNING') {
+                        statusText = "Running";
+                        statusColor = "text-blue-500";
+                      }
+
+                      const toolCalls = s.plannerResponse?.toolCalls || (s.toolCall ? [s.toolCall] : []);
+                      const toolNames = toolCalls.map((tc: any) => tc.name).join(', ');
+
+                      let desc = s.plannerResponse?.thinking || "";
+                      if (!desc && toolNames) {
+                        desc = `Invoking tool: ${toolNames}`;
+                      }
+                      if (!desc && s.type === 'CORTEX_STEP_TYPE_ERROR_MESSAGE') {
+                        desc = s.errorMessage?.message || "Execution error occurred";
+                      }
+                      if (!desc) {
+                        if (s.type === 'CORTEX_STEP_TYPE_PLANNER_RESPONSE') desc = "Formulating plan...";
+                        else if (s.type === 'CORTEX_STEP_TYPE_TOOL_CALL') desc = "Executing tool...";
+                        else if (s.type === 'CORTEX_STEP_TYPE_TOOL_RESPONSE') desc = "Received tool output";
+                        else desc = `Step ${idx + 1}`;
+                      }
+
+                      return (
+                        <div key={idx} className="flex flex-col gap-0.5 border-b border-zinc-900 pb-1.5 last:border-0 last:pb-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-zinc-600 font-bold shrink-0">#{idx + 1}</span>
+                            <span className={`text-[8.5px] uppercase font-bold shrink-0 ${statusColor}`}>{statusText}</span>
+                            <span className="text-zinc-300 truncate flex-1">{desc}</span>
+                          </div>
+                          {toolCalls.length > 0 && (
+                            <div className="pl-4 flex flex-col gap-0.5 mt-0.5">
+                              {toolCalls.map((tc: any, tcIdx: number) => {
+                                let args = "";
+                                try {
+                                  const parsed = JSON.parse(tc.argumentsJson || '{}');
+                                  if (parsed.CommandLine) args = parsed.CommandLine;
+                                  else if (parsed.TargetFile) args = parsed.TargetFile;
+                                  else if (parsed.AbsolutePath) args = parsed.AbsolutePath;
+                                  else if (parsed.Query) args = parsed.Query;
+                                  else args = JSON.stringify(parsed);
+                                } catch {
+                                  args = tc.argumentsJson || "";
+                                }
+                                return (
+                                  <div key={tcIdx} className="text-zinc-500 text-[8.5px] truncate">
+                                    <span className="text-zinc-500 font-bold">tool:</span> <code className="bg-zinc-900 px-1 py-0.5 rounded text-[8px] border border-zinc-800 font-mono text-zinc-300">{tc.name}</code> {args && <span className="opacity-80">({args})</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Terminal Logs */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">Pipeline Console Log</span>
+                <div
+                  ref={logContainerRef}
+                  className="bg-zinc-950 border border-zinc-800/60 rounded-lg p-3 font-mono text-[9px] h-[130px] overflow-y-auto flex flex-col gap-1 text-zinc-400 select-text"
+                >
+                  {pipelineProgress.log.map((logLine, idx) => (
+                    <div key={idx} className="leading-relaxed whitespace-pre-wrap">
+                      {logLine.includes("Successfully completed") || logLine.includes("finished") ? (
+                        <span className="text-emerald-400">{logLine}</span>
+                      ) : logLine.includes("Initiating") || logLine.includes("Initializing") ? (
+                        <span className="text-indigo-300">{logLine}</span>
+                      ) : logLine.includes("Error") ? (
+                        <span className="text-rose-400">{logLine}</span>
+                      ) : (
+                        <span>{logLine}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions Footer */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+                {pipelineProgress.currentPhase !== "complete" ? (
+                  <button
+                    onClick={stopPipelineDebugger}
+                    className="px-4 py-1.5 rounded bg-zinc-800 border border-zinc-700 text-xs font-semibold text-white hover:bg-zinc-700 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancel Run
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopPipelineDebugger}
+                    className="px-4 py-1.5 rounded bg-indigo-650 hover:bg-indigo-600 border border-indigo-750 text-xs font-semibold text-white transition-colors cursor-pointer"
+                  >
+                    Done
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {clipboard?.action === 'cut' && (
