@@ -176,19 +176,17 @@ function synchronizePhysicalFilesWithNodes(targetWorkspaceDir, nodes, layouticaD
     }
   }
 
-  // Remove actual deleted nodes (those that were missing and not matched)
+  // PRESERVE nodes that have no physical file on disk — do NOT delete them.
+  // This allows users to paste a .layoutica folder into their workspace
+  // without the corresponding source files, and have the canvas still render
+  // the node graph from the layout.json / tier files.
   for (const missingNode of missingNodes) {
     if (matchedNodeIds.has(missingNode.id)) {
       continue;
     }
-    console.log(`[Layoutica Host] Physical file for node ${missingNode.name} not found. Removing node.`);
-    nodesChanged = true;
-    nodeFilePaths.delete(missingNode.id);
-    for (let i = currentConnections.length - 1; i >= 0; i--) {
-      if (currentConnections[i].sourceId === missingNode.id || currentConnections[i].targetId === missingNode.id) {
-        currentConnections.splice(i, 1);
-      }
-    }
+    // Keep the node in the graph even though the physical file doesn't exist
+    activeNodes.push(missingNode);
+    console.log(`[Layoutica Host] Physical file for node ${missingNode.name} not found. Keeping node in graph (user may intend to paste source files later).`);
   }
 
   // Register brand new nodes for remaining unmatched files
@@ -438,6 +436,15 @@ function syncBackendFiles(workspacePath, nodes) {
   for (const node of nodes) {
     const newPath = getNodePath(targetWorkspaceDir, node);
     const oldPath = nodeFilePaths.get(node.id);
+
+    // Skip processing for nodes that exist in layout.json but have no
+    // corresponding physical source file. This allows users to paste
+    // a .layoutica folder into a workspace without source files and
+    // see the node graph without having empty stub files created.
+    if (!fs.existsSync(newPath) && !nodeFilePaths.has(node.id)) {
+      console.log(`[Layoutica Host] Skipping backend file write for ${node.name} — no physical source file exists`);
+      continue;
+    }
 
     if (oldPath && oldPath !== newPath) {
       if (fs.existsSync(oldPath)) {
@@ -771,6 +778,38 @@ let activeCascadeId = null;
 const approvedCallIdsMap = new Map();
 const approvedInteractionKeysMap = new Map();
 
+async function getDefaultModel(ls, working) {
+  try {
+    const metadata = { ideName: 'antigravity', extensionName: 'layoutica', ideVersion: vscode.version, locale: 'en' };
+    const res = await secureRPCRequest(`${working.protocol}://127.0.0.1:${working.port}/exa.language_server_pb.LanguageServerService/GetUserStatus`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Connect-Protocol-Version': '1',
+        'x-codeium-csrf-token': ls.csrfToken
+      },
+      body: JSON.stringify({ metadata })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const model = data?.userStatus?.cascadeModelConfigData?.defaultOverrideModelConfig?.modelOrAlias?.model;
+      if (model) return model;
+      
+      const cfgs = data?.userStatus?.cascadeModelConfigData?.clientModelConfigs;
+      if (cfgs && cfgs.length > 0) {
+        const mediumFlash = cfgs.find(c => c.label?.includes('Medium') && c.label?.includes('Flash'));
+        if (mediumFlash?.modelOrAlias?.model) return mediumFlash.modelOrAlias.model;
+        const recommended = cfgs.find(c => c.isRecommended);
+        if (recommended?.modelOrAlias?.model) return recommended.modelOrAlias.model;
+        if (cfgs[0]?.modelOrAlias?.model) return cfgs[0].modelOrAlias.model;
+      }
+    }
+  } catch (err) {
+    console.warn('[Layoutica] Failed to fetch default model from LS:', err.message);
+  }
+  return 'MODEL_PLACEHOLDER_M20';
+}
+
 async function runAntigravityTask(query, onUpdate) {
   const ls = await discoverLS();
   if (!ls) throw new Error('Antigravity Language Server not discovered. Make sure the background agent is running.');
@@ -814,6 +853,9 @@ async function runAntigravityTask(query, onUpdate) {
     activeCascadeId = await startNewCascade();
   }
 
+  const modelId = await getDefaultModel(ls, working);
+  console.log(`[Layoutica] Active model resolved for cascade message: ${modelId}`);
+
   const sendMessage = async (cid) => {
     return await secureRPCRequest(`${protocol}://127.0.0.1:${port}/exa.language_server_pb.LanguageServerService/SendUserCascadeMessage`, {
       method: 'POST',
@@ -831,6 +873,7 @@ async function runAntigravityTask(query, onUpdate) {
         cascadeConfig: {
           plannerConfig: {
             conversational: { agenticMode: true }, 
+            requestedModel: { model: modelId },
             toolConfig: {
               allowAllTools: true,
               autoRun: true
@@ -877,6 +920,13 @@ async function runAntigravityTask(query, onUpdate) {
       
       if (trajRes.ok) {
         const data = await trajRes.json();
+        try {
+          fs.writeFileSync('/tmp/layoutica-antigravity-debug.json', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            status: data.status,
+            trajectory: data.trajectory || data
+          }, null, 2), 'utf8');
+        } catch (writeErr) {}
         const steps = data.trajectory?.steps || [];
         const status = data.status;
         
@@ -1765,13 +1815,21 @@ Please:
               if (!workspaceFolder) return;
               const packageJsonPath = path.join(workspaceFolder.uri.fsPath, "package.json");
               if (isInitializingNextApp || !fs.existsSync(packageJsonPath)) return;
+              // Guard: never overwrite layout.json with an empty or near-empty payload.
+              // This preserves user-pasted .layoutica folders from being wiped out
+              // by premature auto-save before the backend state has fully loaded.
+              const payload = message.payload;
+              if (!payload || !payload.nodes || !Array.isArray(payload.nodes) || payload.nodes.length === 0) {
+                console.log("[Layoutica Host] Skipping syncLayoutState: payload has no nodes (preserving existing layout.json)");
+                return;
+              }
               const layoutJsonPath = activeLayouticaDir
                 ? path.join(activeLayouticaDir, "layout.json")
                 : path.join(workspaceFolder.uri.fsPath, ".layoutica", "layout.json");
               try {
                 const dir = path.dirname(layoutJsonPath);
                 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                fs.writeFileSync(layoutJsonPath, JSON.stringify(message.payload, null, 2), "utf8");
+                fs.writeFileSync(layoutJsonPath, JSON.stringify(payload, null, 2), "utf8");
               } catch (err) {
                 console.error("[Layoutica Host] Failed to write layout.json:", err);
               }
