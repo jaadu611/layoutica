@@ -89,6 +89,8 @@ export default function BackendCanvas() {
   const [antennaSearchQuery, setAntennaSearchQuery] = useState("");
   const [isCheatsheetOpen, setIsCheatsheetOpen] = useState(false);
 
+
+
   const [clipboard, setClipboard] = useState<{
     action: 'copy' | 'cut';
     itemType: 'file' | 'folder';
@@ -131,6 +133,8 @@ export default function BackendCanvas() {
       });
     });
   }, [nodes, activeFolderPath, addNode]);
+
+
 
   const handlePaste = useCallback(() => {
     if (!clipboard) return;
@@ -639,7 +643,7 @@ export default function BackendCanvas() {
     return base.filter(n => n.name.toLowerCase().includes(connectionSearchQuery.toLowerCase()) || n.path.toLowerCase().includes(connectionSearchQuery.toLowerCase()));
   }, [nodes, connectionSearchQuery, connectionSearchNodeId, connections]);
 
-  // Update handleKeyDown to capture Escape, Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+D
+  // Update handleKeyDown to capture Escape, Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+D and all QoL commands
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeTag = document.activeElement?.tagName;
@@ -667,10 +671,133 @@ export default function BackendCanvas() {
           setIsCheatsheetOpen(false);
           handled = true;
         }
+        if (selectedNodeId) {
+          e.preventDefault();
+          selectNode(null);
+          handled = true;
+        }
+        if (selectedFolderId) {
+          e.preventDefault();
+          setSelectedFolderId(null);
+          handled = true;
+        }
         if (handled) return;
       }
 
       if (isGlobalSearchOpen) return;
+
+      if (!isInput) {
+        if (e.key === "f" || e.key === "F") {
+          e.preventDefault();
+          fitToView();
+        }
+        if (e.key === "Home") {
+          e.preventDefault();
+          resetPanZoom();
+        }
+        if (e.key === "g" || e.key === "G") {
+          e.preventDefault();
+          useBuilderStore.getState().setShowGrid(!useBuilderStore.getState().showGrid);
+        }
+        if (e.key === "l" || e.key === "L") {
+          e.preventDefault();
+          handleOrganizeWorkspaceGrid();
+        }
+        if (e.key === "/") {
+          e.preventDefault();
+          setIsGlobalSearchOpen(true);
+        }
+        if (e.key === "Enter" && selectedNodeId) {
+          e.preventDefault();
+          const node = nodes.find(n => n.id === selectedNodeId);
+          if (node) {
+            updateNode(node.id, { isExpanded: !node.isExpanded });
+          }
+        }
+        // Rename Node / Folder: F2 or R
+        if (e.key === "F2" || e.key === "r" || e.key === "R") {
+          if (selectedNodeId) {
+            e.preventDefault();
+            const node = nodes.find(n => n.id === selectedNodeId);
+            if (node) {
+              getVsCodeApi()?.postMessage({
+                type: "renameNode",
+                payload: { nodeId: selectedNodeId, oldName: node.name }
+              });
+            }
+          } else if (selectedFolderId) {
+            e.preventDefault();
+            const folderName = selectedFolderId.replace("folder-", "");
+            getVsCodeApi()?.postMessage({
+              type: "renameFolder",
+              payload: { oldName: folderName, activeFolderPath }
+            });
+          }
+        }
+        // Open file in VS Code or navigate into selected folder: O
+        if (e.key === "o" || e.key === "O") {
+          if (selectedNodeId) {
+            e.preventDefault();
+            const node = nodes.find(n => n.id === selectedNodeId);
+            if (node) {
+              getVsCodeApi()?.postMessage({
+                type: "openFile",
+                payload: { path: node.path, name: node.name, extension: node.extension }
+              });
+            }
+          } else if (selectedFolderId) {
+            e.preventDefault();
+            const folderName = selectedFolderId.replace("folder-", "");
+            navigateToFolder(activeFolderPath ? `${activeFolderPath}/${folderName}` : folderName);
+          }
+        }
+        // Pin/Unpin Node to Dock: P
+        if ((e.key === "p" || e.key === "P") && selectedNodeId) {
+          e.preventDefault();
+          togglePinnedNode(selectedNodeId);
+        }
+        // Go up a folder: Alt + ArrowUp
+        if (e.key === "ArrowUp" && e.altKey) {
+          e.preventDefault();
+          if (activeFolderPath) {
+            const parts = activeFolderPath.split("/");
+            parts.pop();
+            const parentPath = parts.join("/");
+            navigateToFolder(parentPath);
+          }
+        }
+        // Nudge Selected Element (Arrow Keys) - 10px default, 1px with Shift
+        if ((e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") && !e.altKey) {
+          if (selectedNodeId) {
+            e.preventDefault();
+            const node = nodes.find(n => n.id === selectedNodeId);
+            if (node) {
+              const step = e.shiftKey ? 1 : 10;
+              let dx = 0, dy = 0;
+              if (e.key === "ArrowLeft") dx = -step;
+              if (e.key === "ArrowRight") dx = step;
+              if (e.key === "ArrowUp") dy = -step;
+              if (e.key === "ArrowDown") dy = step;
+              updateNode(node.id, { x: node.x + dx, y: node.y + dy });
+            }
+          } else if (selectedFolderId) {
+            e.preventDefault();
+            const folderName = selectedFolderId.replace("folder-", "");
+            const prefix = activeFolderPath ? `${activeFolderPath}/${folderName}` : folderName;
+            const step = e.shiftKey ? 1 : 10;
+            let dx = 0, dy = 0;
+            if (e.key === "ArrowLeft") dx = -step;
+            if (e.key === "ArrowRight") dx = step;
+            if (e.key === "ArrowUp") dy = -step;
+            if (e.key === "ArrowDown") dy = step;
+            
+            const folderNodes = nodes.filter(n => n.path === prefix || n.path.startsWith(prefix + "/"));
+            folderNodes.forEach(node => {
+              updateNode(node.id, { x: node.x + dx, y: node.y + dy });
+            });
+          }
+        }
+      }
 
       if (e.code === "Space" && !isInput) {
         setIsSpacePressed(true);
@@ -749,7 +876,30 @@ export default function BackendCanvas() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [selectedNodeId, deleteNode, duplicateNode, isGlobalSearchOpen, selectedFolderId, deleteFolder, clipboard, nodes, activeFolderPath, duplicateFolder, handlePaste, connectionSearchNodeId, antennaMenuNodeId, openAntennaMenu]);
+  }, [
+    selectedNodeId,
+    deleteNode,
+    duplicateNode,
+    isGlobalSearchOpen,
+    selectedFolderId,
+    deleteFolder,
+    clipboard,
+    nodes,
+    activeFolderPath,
+    duplicateFolder,
+    handlePaste,
+    connectionSearchNodeId,
+    antennaMenuNodeId,
+    openAntennaMenu,
+    fitToView,
+    resetPanZoom,
+    handleOrganizeWorkspaceGrid,
+    isCheatsheetOpen,
+    selectNode,
+    navigateToFolder,
+    togglePinnedNode,
+    updateNode
+  ]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0c0c0e]">
@@ -1653,74 +1803,161 @@ export default function BackendCanvas() {
           >
             <span className="text-xs font-bold font-mono">?</span>
           </button>
+
         </div>
 
         {/* Shortcuts Cheatsheet Modal */}
         {isCheatsheetOpen && (
           <div 
-            className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center pointer-events-auto"
+            className="fixed inset-0 z-[300] bg-black/35 backdrop-blur-md flex items-center justify-center pointer-events-auto animate-fade-in"
             onClick={() => setIsCheatsheetOpen(false)}
           >
             <div 
-              className="bg-zinc-900/95 border border-zinc-800 rounded-2xl w-[400px] shadow-2xl p-5 flex flex-col gap-4 pointer-events-auto"
+              className="bg-zinc-900 border border-zinc-800 rounded-xl w-[720px] p-6 flex flex-col gap-5 pointer-events-auto text-zinc-300 shadow-none"
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>Keyboard Shortcuts</span>
-                </h3>
-                <button 
-                  onClick={() => setIsCheatsheetOpen(false)}
-                  className="text-white/40 hover:text-white transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="flex flex-col gap-2.5 max-h-[350px] overflow-y-auto pr-1 text-xs">
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Pan Canvas</span>
-                  <kbd className="text-right text-white/80 font-mono">Space + Drag / Left/Middle Click Drag</kbd>
+              <div className="grid grid-cols-2 gap-6 max-h-[500px] overflow-y-auto pr-1">
+                {/* Column 1: Viewport & Navigation */}
+                <div className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-2">
+                    <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">Canvas & Viewport</h4>
+                    <div className="flex flex-col gap-1 bg-zinc-950/25 border border-zinc-800/60 rounded-xl p-2.5">
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Pan Canvas</span>
+                        <div className="flex items-center gap-1.5">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Space</kbd>
+                          <span className="text-zinc-500 text-[10px]">+ Drag</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Zoom Canvas</span>
+                        <div className="flex items-center gap-1.5">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Ctrl</kbd>
+                          <span className="text-zinc-500 text-[10px]">+ Scroll</span>
+                          <span className="text-zinc-600 text-[10px]">or</span>
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">+</kbd>
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">-</kbd>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Fit to Screen</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">F</kbd>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Reset Viewport</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Home</kbd>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Toggle Grid</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">G</kbd>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">Navigation & Utilities</h4>
+                    <div className="flex flex-col gap-1 bg-zinc-950/25 border border-zinc-800/60 rounded-xl p-2.5">
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Go to Parent Folder</span>
+                        <div className="flex items-center gap-1">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Alt</kbd>
+                          <span className="text-zinc-500 text-[10px]">+</span>
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">↑</kbd>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Search Workspace</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">/</kbd>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Auto-Arrange Workspace</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">L</kbd>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Deselect / Cancel</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Esc</kbd>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Zoom Canvas</span>
-                  <kbd className="text-right text-white/80 font-mono">Ctrl + Scroll / + / -</kbd>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Enter Folder</span>
-                  <kbd className="text-right text-white/80 font-mono">Double Click Folder</kbd>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Open File in Editor</span>
-                  <kbd className="text-right text-white/80 font-mono">Double Click Node Name</kbd>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Copy Node/Folder</span>
-                  <kbd className="text-right text-white/80 font-mono">Ctrl + C</kbd>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Cut Node/Folder</span>
-                  <kbd className="text-right text-white/80 font-mono">Ctrl + X</kbd>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Paste Node/Folder</span>
-                  <kbd className="text-right text-white/80 font-mono">Ctrl + V</kbd>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Duplicate Node/Folder</span>
-                  <kbd className="text-right text-white/80 font-mono">Ctrl + D</kbd>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
-                  <span className="text-white/50">Delete Node/Folder</span>
-                  <kbd className="text-right text-white/80 font-mono">Delete / Backspace</kbd>
-                </div>
-                <div className="grid grid-cols-2 gap-2 pb-1">
-                  <span className="text-white/50">Close Popups / Cancel</span>
-                  <kbd className="text-right text-white/80 font-mono">Escape</kbd>
+
+                {/* Column 2: File & Node Operations */}
+                <div className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-2">
+                    <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">File & Node Actions</h4>
+                    <div className="flex flex-col gap-1 bg-zinc-950/25 border border-zinc-800/60 rounded-xl p-2.5">
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Nudge Selection</span>
+                        <div className="flex items-center gap-1">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Arrows</kbd>
+                          <span className="text-zinc-500 text-[10px]">(Shift x1px)</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Rename File / Folder</span>
+                        <div className="flex items-center gap-1.5">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">F2</kbd>
+                          <span className="text-zinc-500 text-[10px]">or</span>
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">R</kbd>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Open File / Enter Folder</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">O</kbd>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Pin / Unpin Node</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">P</kbd>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Expand / Collapse Node</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Enter</kbd>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Copy</span>
+                        <div className="flex items-center gap-1">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Ctrl</kbd>
+                          <span className="text-zinc-500 text-[10px]">+</span>
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">C</kbd>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Cut</span>
+                        <div className="flex items-center gap-1">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Ctrl</kbd>
+                          <span className="text-zinc-500 text-[10px]">+</span>
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">X</kbd>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Paste</span>
+                        <div className="flex items-center gap-1">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Ctrl</kbd>
+                          <span className="text-zinc-500 text-[10px]">+</span>
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 shadow-none">V</kbd>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Duplicate</span>
+                        <div className="flex items-center gap-1">
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Ctrl</kbd>
+                          <span className="text-zinc-500 text-[10px]">+</span>
+                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">D</kbd>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] py-1.5 px-2 hover:bg-zinc-800/30 rounded-lg transition-all duration-150">
+                        <span className="text-zinc-400 font-medium">Delete</span>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-zinc-800 border border-zinc-700 rounded text-zinc-300 shadow-none">Del / Backspace</kbd>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
+
+
       </div>
 
       {clipboard?.action === 'cut' && (
