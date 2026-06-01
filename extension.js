@@ -1435,19 +1435,8 @@ export function activate(context) {
                   });
 
                   const activeTiers = Object.keys(nodesByTier).map(Number).sort((a, b) => a - b);
-                  const steps = [];
-                  
-                  activeTiers.forEach(t => {
-                    nodesByTier[t].forEach(node => {
-                      steps.push({ node, tier: t, phase: 1 });
-                    });
-                  });
-
-                  activeTiers.forEach(t => {
-                    nodesByTier[t].forEach(node => {
-                      steps.push({ node, tier: t, phase: 2 });
-                    });
-                  });
+                  const totalSteps = activeTiers.length;
+                  let completedSteps = 0;
 
                   const runReport = [
                     `# AI Feeder Pipeline Antigravity Run`,
@@ -1462,110 +1451,106 @@ export function activate(context) {
                   const logs = [];
                   const timestampStart = new Date().toLocaleTimeString();
                   logs.push(`[${timestampStart}] Initializing Antigravity Agent Feeder Pipeline...`);
-                  logs.push(`[${timestampStart}] Discovered ${activeTiers.length} tier(s). Preparing ${steps.length} sequential execution stages.`);
+                  logs.push(`[${timestampStart}] Discovered ${activeTiers.length} tier(s). Preparing ${totalSteps} sequential execution stages.`);
 
-                  panel.webview.postMessage({
-                    type: "pipelineProgressUpdate",
-                    payload: {
-                      currentPhase: "Phase 1: Design Specs",
-                      currentFile: steps[0].node.name,
-                      currentTier: steps[0].tier,
-                      stepIndex: 0,
-                      totalSteps: steps.length,
-                      log: [...logs],
-                      trajectorySteps: []
-                    }
-                  });
-
-                  for (let i = 0; i < steps.length; i++) {
-                    const { node, tier, phase } = steps[i];
-                    const nodeImports = connections
-                      .filter(c => c.targetId === node.id)
-                      .map(c => {
-                        const s = nodes.find(n => n.id === c.sourceId);
-                        return s ? `/${s.path ? s.path + "/" : ""}${s.name}.${s.extension}` : null;
-                      }).filter(Boolean);
-
-                    const nodeExports = connections
-                      .filter(c => c.sourceId === node.id)
-                      .map(c => {
-                        const t = nodes.find(n => n.id === c.targetId);
-                        return t ? `/${t.path ? t.path + "/" : ""}${t.name}.${t.extension}` : null;
-                      }).filter(Boolean);
-
-                    const phaseName = phase === 1 ? "Phase 1: Design Specs" : "Phase 2: Coder Implementation";
-                    const fileWithExt = `${node.name}.${node.extension}`;
-                    const relativePath = `/${node.path ? node.path + "/" : ""}${fileWithExt}`;
-                    
-                    const logTimestamp = new Date().toLocaleTimeString();
-                    logs.push(`[${logTimestamp}] [Tier ${tier}] Initiating ${phaseName} on '${relativePath}' via Antigravity...`);
-
+                  const updateProgress = (phaseName, filesList, tierNum, stepsArr) => {
                     panel.webview.postMessage({
                       type: "pipelineProgressUpdate",
                       payload: {
                         currentPhase: phaseName,
-                        currentFile: fileWithExt,
-                        currentTier: tier,
-                        stepIndex: i,
-                        totalSteps: steps.length,
+                        currentFile: filesList,
+                        currentTier: tierNum,
+                        stepIndex: completedSteps,
+                        totalSteps: totalSteps,
                         log: [...logs],
-                        trajectorySteps: []
+                        trajectorySteps: stepsArr || []
                       }
                     });
+                  };
 
-                    let prompt = "";
-                    if (phase === 1) {
-                      prompt = `You are a specialized Software Architecture Agent. Your role is to read developer specifications and construct a formal design structure/JSON specification for:
-Target File: ${relativePath}
-Description/Notes: "${node.description || "No description provided."}"
-Imports (incoming dependencies): [${nodeImports.join(", ")}]
-Exports (outgoing dependencies): [${nodeExports.join(", ")}]
+                  if (nodes.length > 0) {
+                    updateProgress("Initializing", `${nodes[0].name}.${nodes[0].extension}`, 1, []);
+                  }
 
-Please:
-1. Examine the imports and existing project structure.
-2. Formulate a comprehensive design specification detailing functions, properties, signatures, and logic flow.
-3. Save/update a JSON specification containing these details inside the project space (e.g. under a directory like \`.layoutica/specs/${node.name}.json\`). Do not block for human approval; write the file directly.`;
-                    } else {
-                      prompt = `You are a senior Software Engineer agent. Your task is to write clean, warning-free, and type-safe code matching a detailed layout specification:
-Target File: ${relativePath}
-Description/Notes: "${node.description || "No description provided."}"
-Imports (incoming dependencies): [${nodeImports.join(", ")}]
-Exports (outgoing dependencies): [${nodeExports.join(", ")}]
+                  const runTier = async (tier) => {
+                    const nodesInTier = nodesByTier[tier] || [];
+                    if (nodesInTier.length === 0) return;
 
-Please:
-1. Read the specification under \`.layoutica/specs/${node.name}.json\` if available, or infer the layout logic based on developer notes and imports/exports.
-2. Implement the full TypeScript code for ${relativePath}. Ensure the file imports functions properly and exports required handlers.
-3. Save the code directly to: \`${path.join(workspaceFolder.uri.fsPath, node.path || "", fileWithExt)}\`.
-4. Run a verification check (e.g., \`npm run build\` or typescript compilation) using command execution tools to prove your implementation compiles without warnings or errors. If there are compilation issues, repair them.`;
-                    }
+                    const phaseName = `Tier ${tier} Generation`;
+                    const filesList = nodesInTier.map(n => `${n.name}.${n.extension}`).join(", ");
+                    
+                    const logTimestamp = new Date().toLocaleTimeString();
+                    logs.push(`[${logTimestamp}] [Tier ${tier}] Initiating concurrent generation on '${filesList}'...`);
+                    updateProgress(phaseName, filesList, tier, []);
 
-                    runReport.push(`\n### Step ${i + 1}: ${phaseName} for \`${relativePath}\` [Tier ${tier}]`);
+                    const nodeSpecs = nodesInTier.map((node, index) => {
+                      const fileWithExt = `${node.name}.${node.extension}`;
+                      const relativePath = `/${node.path ? node.path + "/" : ""}${fileWithExt}`;
+                      const absolutePath = path.join(workspaceFolder.uri.fsPath, node.path || "", fileWithExt);
+                      
+                      // Ensure target directory exists
+                      const targetDir = path.dirname(absolutePath);
+                      if (!fs.existsSync(targetDir)) {
+                        try {
+                          fs.mkdirSync(targetDir, { recursive: true });
+                        } catch (err) {}
+                      }
+
+                      const nodeImports = connections
+                        .filter(c => c.targetId === node.id)
+                        .map(c => {
+                          const s = nodes.find(n => n.id === c.sourceId);
+                          return s ? `/${s.path ? s.path + "/" : ""}${s.name}.${s.extension}` : null;
+                        }).filter(Boolean);
+
+                      const nodeExports = connections
+                        .filter(c => c.sourceId === node.id)
+                        .map(c => {
+                          const t = nodes.find(n => n.id === c.targetId);
+                          return t ? `/${t.path ? t.path + "/" : ""}${t.name}.${t.extension}` : null;
+                        }).filter(Boolean);
+
+                      return `${index + 1}. **File**: \`${relativePath}\`
+   - **Absolute Path**: \`${absolutePath}\`
+   - **Description**: "${node.description || "No description provided."}"
+   - **Imports**: [${nodeImports.join(", ")}]
+   - **Exports**: [${nodeExports.join(", ")}]`;
+                    }).join("\n\n");
+
+                    const prompt = `You are a team of senior Software Engineers and Architects. Your task is to design and implement the complete, warning-free, and type-safe code for the following independent files in Tier ${tier}:
+
+${nodeSpecs}
+
+Please process these files CONCURRENTLY:
+1. Examine the imports, exports, developer notes, and existing project structure for each file.
+2. Implement the complete, functional TypeScript/JavaScript code for each file. Ensure the imports match correctly and all necessary handlers and structures are exported.
+3. Save the code directly to each file's absolute path.
+4. Run verification checks (e.g., \`npm run build\` or typescript compilation) using command execution tools to prove your implementations compile without warnings or errors. If there are compilation issues, repair them.
+5. IMPORTANT: Define specialized subagents using the define_subagent and invoke_subagent tools to perform these tasks concurrently for each file so that they run in parallel, rather than processing them one by one. Do not block for human approval; write the files directly.`;
+
+                    runReport.push(`\n### [Tier ${tier}] Generation for ${filesList}`);
                     runReport.push(`* **Prompt Sent**: ${prompt}`);
 
                     try {
                       const responseText = await runAntigravityTask(prompt, (update) => {
-                        panel.webview.postMessage({
-                          type: "pipelineProgressUpdate",
-                          payload: {
-                            currentPhase: phaseName,
-                            currentFile: fileWithExt,
-                            currentTier: tier,
-                            stepIndex: i,
-                            totalSteps: steps.length,
-                            log: [...logs],
-                            trajectorySteps: update.steps || []
-                          }
-                        });
+                        updateProgress(phaseName, filesList, tier, update.steps);
                       });
 
                       const finishTimestamp = new Date().toLocaleTimeString();
-                      logs.push(`[${finishTimestamp}] Successfully completed '${fileWithExt}' phase ${phase}.`);
+                      logs.push(`[${finishTimestamp}] Successfully completed Tier ${tier} generation for '${filesList}'.`);
                       runReport.push(`* **Response/Result**:\n${responseText}`);
                     } catch (taskErr) {
                       const errTimestamp = new Date().toLocaleTimeString();
-                      logs.push(`[${errTimestamp}] Error in ${phaseName} on '${fileWithExt}': ${taskErr.message}`);
+                      logs.push(`[${errTimestamp}] Error in Tier ${tier} generation on '${filesList}': ${taskErr.message}`);
                       runReport.push(`* **Error**: ${taskErr.message}`);
+                    } finally {
+                      completedSteps++;
+                      updateProgress(phaseName, filesList, tier, []);
                     }
+                  };
+
+                  for (const tier of activeTiers) {
+                    await runTier(tier);
                   }
 
                   const pipelineDir = path.join(workspaceFolder.uri.fsPath, ".layoutica", "ai_pipeline");
@@ -1583,8 +1568,8 @@ Please:
                       currentPhase: "complete",
                       currentFile: "",
                       currentTier: 0,
-                      stepIndex: steps.length,
-                      totalSteps: steps.length,
+                      stepIndex: totalSteps,
+                      totalSteps: totalSteps,
                       log: [...logs],
                       trajectorySteps: []
                     }

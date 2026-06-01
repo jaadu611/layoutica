@@ -2039,80 +2039,81 @@ export default function BackendCanvas() {
         )}
 
         {/* Pipeline Debugger Overlay */}
+        {/* Pipeline Debugger Overlay */}
         {isPipelineRunning && (
           <div
-            className="fixed inset-0 z-[300] bg-black/45 backdrop-blur-md flex items-center justify-center pointer-events-auto animate-fade-in"
+            className="fixed inset-0 z-[300] bg-black/60 flex items-center justify-center pointer-events-auto"
           >
             <div
-              className="bg-zinc-900 border border-zinc-800 rounded-xl w-[640px] p-6 flex flex-col gap-4 pointer-events-auto text-zinc-300 shadow-none"
+              className="bg-zinc-950 border border-zinc-800 rounded-xl w-[660px] p-6 flex flex-col gap-4 pointer-events-auto text-zinc-300 shadow-2xl relative overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
+                <div className="flex items-center gap-3">
                   {pipelineProgress.currentPhase === "complete" ? (
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0"></span>
                   ) : (
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_8px_#6366f1]" />
+                    <span className="h-2 w-2 rounded-full bg-indigo-500 shrink-0"></span>
                   )}
-                  <h3 className="text-sm font-bold text-zinc-200 tracking-wide uppercase">
-                    AI Pipeline Debugger (Antigravity Run)
+                  <h3 className="text-xs font-bold text-zinc-200 tracking-wider uppercase">
+                    AI Pipeline Debugger
                   </h3>
                 </div>
                 {pipelineProgress.currentPhase === "complete" && (
                   <button
                     onClick={stopPipelineDebugger}
-                    className="text-zinc-400 hover:text-white hover:bg-zinc-800 p-1 rounded transition-colors"
+                    className="text-zinc-400 hover:text-white hover:bg-zinc-800 p-1.5 rounded-lg transition-colors cursor-pointer"
                   >
-                    <X size={16} />
+                    <X size={14} />
                   </button>
                 )}
               </div>
 
               {/* Progress Bar */}
-              <div className="flex flex-col gap-1.5 text-xs">
+              <div className="flex flex-col gap-2 text-xs">
                 <div className="flex justify-between font-medium">
-                  <span className="text-zinc-400">
+                  <span className="text-zinc-300 font-semibold">
                     {pipelineProgress.currentPhase === "complete" ? "Execution Completed" : pipelineProgress.currentPhase}
                   </span>
-                  <span className="text-zinc-400 font-mono">
+                  <span className="text-zinc-400 font-mono bg-zinc-900 border border-zinc-800/80 px-2 py-0.5 rounded text-[10px]">
                     {pipelineProgress.stepIndex} / {pipelineProgress.totalSteps || 1} steps
                   </span>
                 </div>
-                <div className="w-full bg-zinc-950 border border-zinc-800/80 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-zinc-950 border border-zinc-900 rounded-full h-1.5 overflow-hidden">
                   <div
                     className="bg-indigo-500 h-full transition-all duration-300 rounded-full"
                     style={{ width: `${(pipelineProgress.stepIndex / (pipelineProgress.totalSteps || 1)) * 100}%` }}
                   />
                 </div>
                 {pipelineProgress.currentPhase !== "complete" && (
-                  <div className="flex justify-between text-[10px] text-zinc-500 mt-0.5">
-                    <span>Processing: <strong className="text-zinc-400 font-mono">{pipelineProgress.currentFile}</strong></span>
-                    <span>Tier: <strong className="text-zinc-400 font-mono">{pipelineProgress.currentTier}</strong></span>
+                  <div className="flex justify-between text-[10px] text-zinc-500 px-1 mt-0.5">
+                    <span>Processing: <strong className="text-zinc-400 font-mono font-semibold">{pipelineProgress.currentFile}</strong></span>
+                    <span>Tier: <strong className="text-indigo-400 font-mono font-semibold">{pipelineProgress.currentTier}</strong></span>
                   </div>
                 )}
               </div>
 
               {/* Antigravity Step Trajectory List */}
               {pipelineProgress.trajectorySteps && pipelineProgress.trajectorySteps.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">Antigravity Steps</span>
-                  <div className="bg-zinc-950 border border-zinc-800/60 rounded-lg p-3 font-mono text-[9px] h-[140px] overflow-y-auto flex flex-col gap-2 text-zinc-400 select-text">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest px-1">Antigravity Steps</span>
+                  <div className="bg-zinc-950/80 border border-zinc-900 rounded-xl p-3 font-mono text-[9px] h-[130px] overflow-y-auto flex flex-col gap-2 text-zinc-400 select-text custom-scrollbar">
                     {pipelineProgress.trajectorySteps.map((s: any, idx: number) => {
                       const isWaiting = s.status === 3 || s.status === 'WAITING' || s.status === 'CASCADE_STEP_STATUS_WAITING' || s.requestedInteraction;
                       const isDone = s.status === 2 || s.status === 'DONE' || s.status === 'CASCADE_STEP_STATUS_DONE';
                       const isError = s.type === 'CORTEX_STEP_TYPE_ERROR_MESSAGE' || s.status === 4 || s.status === 'ERROR' || s.status === 'CASCADE_STEP_STATUS_ERROR';
                       
                       let statusText = "Done";
-                      let statusColor = "text-emerald-500";
+                      let statusColor = "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
                       if (isError) {
                         statusText = "Error";
-                        statusColor = "text-red-500";
+                        statusColor = "text-rose-400 bg-rose-500/10 border-rose-500/20";
                       } else if (isWaiting) {
                         statusText = "Waiting";
-                        statusColor = "text-amber-500";
+                        statusColor = "text-amber-400 bg-amber-500/10 border-amber-500/20";
                       } else if (s.status === 1 || s.status === 'RUNNING' || s.status === 'CASCADE_STEP_STATUS_RUNNING') {
                         statusText = "Running";
-                        statusColor = "text-blue-500";
+                        statusColor = "text-indigo-400 bg-indigo-500/10 border-indigo-500/20";
                       }
 
                       const toolCalls = s.plannerResponse?.toolCalls || (s.toolCall ? [s.toolCall] : []);
@@ -2133,14 +2134,14 @@ export default function BackendCanvas() {
                       }
 
                       return (
-                        <div key={idx} className="flex flex-col gap-0.5 border-b border-zinc-900 pb-1.5 last:border-0 last:pb-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-zinc-600 font-bold shrink-0">#{idx + 1}</span>
-                            <span className={`text-[8.5px] uppercase font-bold shrink-0 ${statusColor}`}>{statusText}</span>
+                        <div key={idx} className="flex flex-col gap-1 border-b border-zinc-900/60 pb-2 last:border-0 last:pb-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-zinc-600 font-bold shrink-0 text-[10px]">#{idx + 1}</span>
+                            <span className={`text-[8px] uppercase font-bold shrink-0 px-1.5 py-0.5 rounded border ${statusColor}`}>{statusText}</span>
                             <span className="text-zinc-300 truncate flex-1">{desc}</span>
                           </div>
                           {toolCalls.length > 0 && (
-                            <div className="pl-4 flex flex-col gap-0.5 mt-0.5">
+                            <div className="pl-4 flex flex-col gap-1 mt-0.5 border-l border-zinc-900 ml-1.5">
                               {toolCalls.map((tc: any, tcIdx: number) => {
                                 let args = "";
                                 try {
@@ -2154,8 +2155,10 @@ export default function BackendCanvas() {
                                   args = tc.argumentsJson || "";
                                 }
                                 return (
-                                  <div key={tcIdx} className="text-zinc-500 text-[8.5px] truncate">
-                                    <span className="text-zinc-500 font-bold">tool:</span> <code className="bg-zinc-900 px-1 py-0.5 rounded text-[8px] border border-zinc-800 font-mono text-zinc-300">{tc.name}</code> {args && <span className="opacity-80">({args})</span>}
+                                  <div key={tcIdx} className="text-zinc-500 text-[8.5px] truncate flex items-center gap-1.5">
+                                    <span className="text-zinc-500 font-bold">tool:</span> 
+                                    <code className="bg-zinc-900 px-1.5 py-0.5 rounded text-[8px] border border-zinc-800 font-mono text-zinc-300">{tc.name}</code> 
+                                    {args && <span className="opacity-75 font-mono truncate">({args})</span>}
                                   </div>
                                 );
                               })}
@@ -2169,20 +2172,20 @@ export default function BackendCanvas() {
               )}
 
               {/* Terminal Logs */}
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">Pipeline Console Log</span>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest px-1">Pipeline Console Log</span>
                 <div
                   ref={logContainerRef}
-                  className="bg-zinc-950 border border-zinc-800/60 rounded-lg p-3 font-mono text-[9px] h-[130px] overflow-y-auto flex flex-col gap-1 text-zinc-400 select-text"
+                  className="bg-zinc-950/80 border border-zinc-900 rounded-xl p-3 font-mono text-[9px] h-[120px] overflow-y-auto flex flex-col gap-1.5 text-zinc-400 select-text custom-scrollbar"
                 >
                   {pipelineProgress.log.map((logLine, idx) => (
-                    <div key={idx} className="leading-relaxed whitespace-pre-wrap">
+                    <div key={idx} className="leading-normal whitespace-pre-wrap">
                       {logLine.includes("Successfully completed") || logLine.includes("finished") ? (
-                        <span className="text-emerald-400">{logLine}</span>
+                        <span className="text-emerald-400 font-medium">{logLine}</span>
                       ) : logLine.includes("Initiating") || logLine.includes("Initializing") ? (
-                        <span className="text-indigo-300">{logLine}</span>
+                        <span className="text-indigo-400 font-medium">{logLine}</span>
                       ) : logLine.includes("Error") ? (
-                        <span className="text-rose-400">{logLine}</span>
+                        <span className="text-rose-400 font-semibold">{logLine}</span>
                       ) : (
                         <span>{logLine}</span>
                       )}
@@ -2192,18 +2195,18 @@ export default function BackendCanvas() {
               </div>
 
               {/* Actions Footer */}
-              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-zinc-800/60">
                 {pipelineProgress.currentPhase !== "complete" ? (
                   <button
                     onClick={stopPipelineDebugger}
-                    className="px-4 py-1.5 rounded bg-zinc-800 border border-zinc-700 text-xs font-semibold text-white hover:bg-zinc-700 hover:text-white transition-colors cursor-pointer"
+                    className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition-colors cursor-pointer shadow-sm"
                   >
                     Cancel Run
                   </button>
                 ) : (
                   <button
                     onClick={stopPipelineDebugger}
-                    className="px-4 py-1.5 rounded bg-indigo-650 hover:bg-indigo-600 border border-indigo-750 text-xs font-semibold text-white transition-colors cursor-pointer"
+                    className="px-5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 border border-indigo-700 text-xs font-semibold text-white transition-colors cursor-pointer shadow-sm"
                   >
                     Done
                   </button>
