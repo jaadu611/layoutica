@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Toolbar from "@/components/builder/frontend/Toolbar";
 import Sidebar from "@/components/builder/frontend/Sidebar";
 import Canvas from "@/components/builder/frontend/Canvas";
 import PropertiesPanel from "@/components/builder/frontend/PropertiesPanel";
 import { useBuilderStore } from "@/lib/builder/frontend/store";
 import { getVsCodeApi } from "@/lib/builder/frontend/vscode";
+import { DEFAULT_MOCK_PAGES } from "@/lib/builder/frontend/mockData";
+import { extractDesignTokens } from "@/lib/builder/frontend/tokenExtractor";
 import { generateAllPages } from "@/lib/builder/frontend/codeGenerator";
 import {
   ChevronLeft,
@@ -16,16 +18,12 @@ import {
   Sparkles,
   Terminal,
   Layers,
-  X,
   ExternalLink,
 } from "lucide-react";
 
-import { useBackendStore } from "@/lib/builder/backend/store";
-import BackendCanvas from "@/components/builder/backend/Canvas";
 import { UILayoutSnapshot } from "@/lib/builder/frontend/types";
 
 export default function BuilderPage() {
-  const { mode } = useBackendStore();
   const {
     rightPanelCollapsed,
     setRightPanelCollapsed,
@@ -68,7 +66,6 @@ export default function BuilderPage() {
     } else {
       const vscode = getVsCodeApi();
       if (vscode) {
-        vscode.postMessage({ type: "getBackendState" });
         // Request UI layout snapshot
         vscode.postMessage({ type: "loadUILayout" });
       } else {
@@ -95,7 +92,8 @@ export default function BuilderPage() {
         if (message.payload?.json) {
           try {
             const parsed: UILayoutSnapshot = JSON.parse(message.payload.json);
-            if (parsed?.data?.pages?.length) {
+            const totalElements = parsed?.data?.pages?.reduce((acc, p) => acc + (p.elements?.length || 0), 0) || 0;
+            if (parsed?.data?.pages?.length && totalElements > 0) {
               loadProject(
                 parsed.data.pages,
                 parsed.data.savedComponents ?? [],
@@ -104,10 +102,10 @@ export default function BuilderPage() {
               if (parsed.metadata?.exportMode) {
                 setExportMode(parsed.metadata.exportMode);
               }
-              if (parsed.data.viewSettings?.leftSidebarCollapsed) {
+              if (parsed.data.viewSettings?.leftSidebarCollapsed !== undefined) {
                 setLeftSidebarCollapsed(parsed.data.viewSettings.leftSidebarCollapsed);
               }
-              if (parsed.data.viewSettings?.rightPanelCollapsed) {
+              if (parsed.data.viewSettings?.rightPanelCollapsed !== undefined) {
                 setRightPanelCollapsed(parsed.data.viewSettings.rightPanelCollapsed);
               }
               if (parsed.data.viewSettings?.activePageId) {
@@ -117,36 +115,17 @@ export default function BuilderPage() {
             }
           } catch {}
         }
-        // No valid layout found, show modal
-        setExportMode(null);
+        // If empty or first-time open, load the rich mock website with extracted design tokens!
+        const initialTokens = extractDesignTokens(DEFAULT_MOCK_PAGES);
+        loadProject(DEFAULT_MOCK_PAGES, [], initialTokens);
+        useBuilderStore.getState().setActivePage("page-default-home");
+        setExportMode("live");
       } else if (message.type === "nextAppInitStatus") {
         setInitStatus(message.payload.status);
-        if (message.payload.status === "success") {
-          useBackendStore.getState().sync();
-        }
         if (message.payload.error) {
           console.error("[Layoutica Webview] Initialization error details:", message.payload.error);
           setInitError(message.payload.error);
         }
-      } else if (message.type === "getBackendStateResponse") {
-        const store = useBackendStore.getState();
-        store.setNodes(message.payload.nodes || []);
-        if (message.payload.connections?.length) {
-          message.payload.connections.forEach((c: { id: string; sourceId: string; targetId: string; type: "import" | "export" }) => {
-            useBackendStore.setState(s => ({
-              connections: s.connections.some(e => e.id === c.id) ? s.connections : [...s.connections, c]
-            }));
-          });
-        }
-        if (message.payload.pinnedNodes?.length) {
-          useBackendStore.setState({ pinnedNodes: message.payload.pinnedNodes });
-        }
-        if (message.payload.activeGhostNodes?.length) {
-          useBackendStore.setState({ activeGhostNodes: message.payload.activeGhostNodes });
-        }
-      } else if (message.type === "fileSavedSync") {
-        const { nodeId, description, imports, exports } = message.payload;
-        useBackendStore.getState().syncFileChanges(nodeId, description, imports, exports);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -204,63 +183,8 @@ export default function BuilderPage() {
     }
   }, [pages, components, designTokens, exportMode, activePageId, leftSidebarCollapsed, rightPanelCollapsed, hydrationChecked, initStatus]);
 
-  // Use a ref for the sidebar to avoid unnecessary re-renders, but we'll use state-driven styles for the animation
-  // Actually, we'll just use the store values directly in the render logic with CSS transitions.
-
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-app-bg">
-      {mounted && exportMode === null && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md select-none">
-          <div className="bg-[#18181b] border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.9)] rounded-2xl p-8 max-w-[500px] w-full mx-4 flex flex-col gap-6 text-center">
-            <div className="flex flex-col gap-2">
-              <span className="text-xl font-bold text-white tracking-tight">
-                Choose Builder Mode
-              </span>
-              <span className="text-xs text-white/50 leading-relaxed px-4">
-                How would you like to manage the generated code for your website design?
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-3 mt-2">
-              {/* Option 1: Live Mode */}
-              <button
-                onClick={() => setExportMode("live")}
-                className="flex items-start gap-4 p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-accent-blue/40 text-left transition-all duration-200 cursor-pointer group"
-              >
-                <div className="p-2 rounded-lg bg-accent-blue/10 text-accent-blue mt-0.5 group-hover:scale-105 transition-transform duration-200">
-                  <Sparkles size={18} />
-                </div>
-                <div className="flex-1 flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-white group-hover:text-accent-blue transition-colors">
-                    Live Workspace Sync (Recommended)
-                  </span>
-                  <span className="text-[11px] text-white/40 leading-normal">
-                    Files are updated directly in your workspace folder in real-time as you edit. No manual exporting needed.
-                  </span>
-                </div>
-              </button>
-
-              {/* Option 2: Export at the end */}
-              <button
-                onClick={() => setExportMode("export")}
-                className="flex items-start gap-4 p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/20 text-left transition-all duration-200 cursor-pointer group"
-              >
-                <div className="p-2 rounded-lg bg-white/5 text-white/60 mt-0.5 group-hover:scale-105 transition-transform duration-200">
-                  <Terminal size={18} />
-                </div>
-                <div className="flex-1 flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-white">
-                    Manual Export at the End
-                  </span>
-                  <span className="text-[11px] text-white/40 leading-normal">
-                    Design first, and manually download your fully structured codebase as a ZIP archive when finished.
-                  </span>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {mounted && initStatus === "initializing" && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/85 backdrop-blur-md select-none">
           <div className="bg-[#18181b] border border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.9)] rounded-2xl p-8 max-w-[400px] w-full mx-4 flex flex-col items-center gap-6 text-center">
@@ -295,7 +219,6 @@ export default function BuilderPage() {
             <button
               onClick={() => {
                 setInitStatus("idle");
-                setExportMode(null); // Let them choose mode or retry
               }}
               className="mt-2 text-xs bg-white/10 hover:bg-white/15 text-white/90 font-medium px-4 py-2 rounded-lg cursor-pointer transition-colors"
             >
@@ -307,44 +230,62 @@ export default function BuilderPage() {
 
       <Toolbar />
       <div className="flex flex-1 overflow-hidden relative bg-app-bg">
-        <div className={`flex-1 flex flex-col min-w-0 ${mode === "backend" ? "hidden" : ""}`}>
+        <div className="flex-1 flex flex-col min-w-0">
           <Canvas />
-        </div>
-        <div className={`flex-1 flex flex-col min-w-0 ${mode === "backend" ? "" : "hidden"}`}>
-          <BackendCanvas />
         </div>
 
         {/* Floating Sidebar Section */}
-        {mode === "frontend" && (
-          <div
-            className="absolute left-8 top-6 z-40 flex flex-col gap-2 items-start transition-all duration-300 ease-in-out"
-            style={{ width: isLayersDetached && !leftSidebarCollapsed ? 472 : 230 }}
+        <div
+          className="absolute left-8 top-6 z-40 flex flex-col gap-2 items-start transition-all duration-300 ease-in-out"
+          style={{ width: isLayersDetached && !leftSidebarCollapsed ? 472 : 230 }}
+        >
+          {/* Compact Toggle Button */}
+          <button
+            onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
+            className="w-[230px] h-8 bg-panel-bg/80 backdrop-blur-xl border border-panel-border rounded-xl flex items-center justify-center text-white/20 hover:text-white/60 transition-all cursor-pointer group shadow-lg pointer-events-auto relative z-50 overflow-hidden"
+            style={{ outline: "none" }}
           >
-            {/* Compact Toggle Button */}
-            <button
-              onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
-              className="w-[230px] h-8 bg-panel-bg/80 backdrop-blur-xl border border-panel-border rounded-xl flex items-center justify-center text-white/20 hover:text-white/60 transition-all cursor-pointer group shadow-lg pointer-events-auto relative z-50 overflow-hidden"
-              style={{ outline: "none" }}
-            >
-              <div className="flex items-center gap-2 transition-transform duration-200 active:scale-95">
-                {leftSidebarCollapsed ? (
-                  <>
-                    <ChevronDown size={12} className="opacity-40" />
-                    <span className="text-[9px] uppercase tracking-widest font-bold">
-                      Panels
-                    </span>
-                    <ChevronDown size={12} className="opacity-40" />
-                  </>
-                ) : (
-                  <ChevronUp size={14} />
-                )}
-              </div>
-              <div className="absolute inset-x-0 top-0 h-px bg-white/5 pointer-events-none" />
-            </button>
+            <div className="flex items-center gap-2 transition-transform duration-200 active:scale-95">
+              {leftSidebarCollapsed ? (
+                <>
+                  <ChevronDown size={12} className="opacity-40" />
+                  <span className="text-[9px] uppercase tracking-widest font-bold">
+                    Panels
+                  </span>
+                  <ChevronDown size={12} className="opacity-40" />
+                </>
+              ) : (
+                <ChevronUp size={14} />
+              )}
+            </div>
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5 pointer-events-none" />
+          </button>
 
-            {/* Side-by-side Panels Wrapper */}
-            <div className="flex gap-3 items-start pointer-events-none w-full">
-              {/* Main Sidebar Box */}
+          {/* Side-by-side Panels Wrapper */}
+          <div className="flex gap-3 items-start pointer-events-none w-full">
+            {/* Main Sidebar Box */}
+            <div
+              className={`flex flex-col overflow-hidden bg-panel-bg shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto origin-top transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                leftSidebarCollapsed || !mounted
+                  ? "opacity-0 scale-95 -translate-y-2 pointer-events-none"
+                  : "opacity-100 scale-100 translate-y-0"
+              }`}
+              style={{
+                width: 230,
+                height: leftSidebarCollapsed || !mounted ? 0 : "64vh",
+                border:
+                  leftSidebarCollapsed || !mounted
+                    ? "none"
+                    : "1px solid var(--panel-border)",
+              }}
+            >
+              <div className="flex-1 flex flex-col min-h-0 bg-panel-bg/95 backdrop-blur-3xl">
+                {mounted && <Sidebar />}
+              </div>
+            </div>
+
+            {/* Detached Layers Panel */}
+            {isLayersDetached && (
               <div
                 className={`flex flex-col overflow-hidden bg-panel-bg shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto origin-top transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
                   leftSidebarCollapsed || !mounted
@@ -361,87 +302,62 @@ export default function BuilderPage() {
                 }}
               >
                 <div className="flex-1 flex flex-col min-h-0 bg-panel-bg/95 backdrop-blur-3xl">
-                  {mounted && <Sidebar />}
-                </div>
-              </div>
-
-              {/* Detached Layers Panel */}
-              {isLayersDetached && (
-                <div
-                  className={`flex flex-col overflow-hidden bg-panel-bg shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto origin-top transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                    leftSidebarCollapsed || !mounted
-                      ? "opacity-0 scale-95 -translate-y-2 pointer-events-none"
-                      : "opacity-100 scale-100 translate-y-0"
-                  }`}
-                  style={{
-                    width: 230,
-                    height: leftSidebarCollapsed || !mounted ? 0 : "64vh",
-                    border:
-                      leftSidebarCollapsed || !mounted
-                        ? "none"
-                        : "1px solid var(--panel-border)",
-                  }}
-                >
-                  <div className="flex-1 flex flex-col min-h-0 bg-panel-bg/95 backdrop-blur-3xl">
-                    {/* Detached Panel Header */}
-                    <div className="flex items-center justify-between h-11 px-3 border-b border-panel-border shrink-0">
-                      <div className="flex items-center gap-1.5">
-                        <Layers size={12} className="text-white/40" />
-                        <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest font-sans">
-                          Layers
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => setLayersDetached(false)}
-                        className="p-0.5 h-5 w-5 flex items-center justify-center bg-white/4 hover:bg-white/10 rounded text-white/45 hover:text-white transition-colors cursor-pointer shrink-0 border border-white/5"
-                        title="Reattach to Sidebar"
-                      >
-                        <ExternalLink size={9} className="rotate-180" />
-                      </button>
+                  {/* Detached Panel Header */}
+                  <div className="flex items-center justify-between h-11 px-3 border-b border-panel-border shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <Layers size={12} className="text-white/40" />
+                      <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest font-sans">
+                        Layers
+                      </span>
                     </div>
-                    {/* Content */}
-                    <div className="flex-1 flex flex-col min-h-0">
-                      <Sidebar detachedOnly={true} />
-                    </div>
+                    <button
+                      onClick={() => setLayersDetached(false)}
+                      className="p-0.5 h-5 w-5 flex items-center justify-center bg-white/4 hover:bg-white/10 rounded text-white/45 hover:text-white transition-colors cursor-pointer shrink-0 border border-white/5"
+                      title="Reattach to Sidebar"
+                    >
+                      <ExternalLink size={9} className="rotate-180" />
+                    </button>
+                  </div>
+                  {/* Content */}
+                  <div className="flex-1 flex flex-col min-h-0">
+                    <Sidebar detachedOnly={true} />
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Collapsible Right Panel */}
-        {mode === "frontend" && (
+        <div
+          className={`relative z-40 flex h-full transition-all duration-500 cubic-bezier bg-panel-bg border-l border-panel-border ${
+            rightPanelCollapsed ? "w-0" : ""
+          }`}
+        >
+          {/* Right Toggle Button */}
+          <button
+            onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+            className="absolute top-1/2 -left-6 -translate-y-1/2 w-6 h-16 bg-panel-bg/95 border border-panel-border border-r-0 rounded-l-xl flex items-center justify-center text-white/10 hover:text-white/80 transition-all cursor-pointer group z-50 shadow-2xl backdrop-blur-md"
+          >
+            <div className="group-hover:scale-110 transition-transform">
+              {rightPanelCollapsed ? (
+                <ChevronLeft size={16} />
+              ) : (
+                <ChevronRight size={16} />
+              )}
+            </div>
+          </button>
+
           <div
-            className={`relative z-40 flex h-full transition-all duration-500 cubic-bezier bg-panel-bg border-l border-panel-border ${
-              rightPanelCollapsed ? "w-0" : ""
+            className={`h-full overflow-hidden transition-all duration-300 ${
+              rightPanelCollapsed
+                ? "opacity-0 invisible pointer-events-none"
+                : "opacity-100 visible"
             }`}
           >
-            {/* Right Toggle Button */}
-            <button
-              onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
-              className="absolute top-1/2 -left-6 -translate-y-1/2 w-6 h-16 bg-panel-bg/95 border border-panel-border border-r-0 rounded-l-xl flex items-center justify-center text-white/10 hover:text-white/80 transition-all cursor-pointer group z-50 shadow-2xl backdrop-blur-md"
-            >
-              <div className="group-hover:scale-110 transition-transform">
-                {rightPanelCollapsed ? (
-                  <ChevronLeft size={16} />
-                ) : (
-                  <ChevronRight size={16} />
-                )}
-              </div>
-            </button>
-
-            <div
-              className={`h-full overflow-hidden transition-all duration-300 ${
-                rightPanelCollapsed
-                  ? "opacity-0 invisible pointer-events-none"
-                  : "opacity-100 visible"
-              }`}
-            >
-              <PropertiesPanel />
-            </div>
+            <PropertiesPanel />
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

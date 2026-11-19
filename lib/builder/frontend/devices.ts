@@ -1,3 +1,5 @@
+// Description: 
+
 export interface DevicePreset {
   id: string;
   name: string;
@@ -23,6 +25,7 @@ export const DEVICE_PRESETS: DevicePreset[] = [
   { id: "tablet-generic", name: "Generic Tablet", width: 768, height: 1024, type: "Tablet" },
 
   // Desktop Devices
+  { id: "desktop", name: "Desktop (1440×900)", width: 1440, height: 900, type: "Desktop" },
   { id: "macbook-air-13", name: "MacBook Air 13\"", width: 1280, height: 800, type: "Desktop" },
   { id: "macbook-pro-14", name: "MacBook Pro 14\"", width: 1512, height: 982, type: "Desktop" },
   { id: "macbook-pro-16", name: "MacBook Pro 16\"", width: 1728, height: 1117, type: "Desktop" },

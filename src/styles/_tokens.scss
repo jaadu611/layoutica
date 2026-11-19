@@ -1,0 +1,163 @@
+// Design Tokens SCSS Map
+$tokens-colors: (
+  "color-1": #ffffff,
+  "color-2": rgba(255, 255, 255, 0.7),
+  "color-3": rgba(255, 255, 255, 0.08),
+  "surface-dark": #18181b,
+  "brand-primary": #0d99ff,
+  "canvas-dark": #0d0d0f,
+  "color-7": rgba(255, 255, 255, 0.6),
+  "color-8": rgba(18, 18, 20, 0.85),
+  "color-9": 1px solid rgba(255, 255, 255, 0.08),
+  "canvas-dark-2": #121214,
+  "color-11": 1px solid rgba(255, 255, 255, 0.06),
+  "color-12": rgba(255, 255, 255, 0.35),
+  "brand-primary-2": #38bdf8,
+  "color-14": rgba(255,255,255,0.6),
+  "color-15": rgba(255,255,255,0.55),
+  "accent-emerald": #34d399,
+  "color-17": rgba(13, 153, 255, 0.12),
+  "color-18": rgba(13, 153, 255, 0.25),
+  "color-19": rgba(255, 255, 255, 0.65),
+  "color-20": rgba(255, 255, 255, 0.05),
+  "color-21": rgba(255, 255, 255, 0.12),
+  "accent-purple": #a78bfa,
+  "accent-purple-2": #c084fc,
+  "color-24": rgba(167, 139, 250, 0.15),
+  "color-25": rgba(52, 211, 153, 0.15),
+  "accent-orange": #fbbf24,
+  "color-27": rgba(245, 158, 11, 0.15),
+);
+
+$tokens-spacing: (
+  "space-1": 4px,
+  "space-6": 6px,
+  "space-2": 8px,
+  "space-10": 10px,
+  "space-3": 12px,
+  "space-14": 14px,
+  "space-4": 16px,
+  "space-18": 18px,
+  "space-6": 24px,
+  "space-28": 28px,
+  "space-8": 32px,
+  "space-10": 40px,
+  "space-12": 48px,
+  "space-56": 56px,
+  "space-16": 64px,
+  "space-72": 72px,
+  "space-20": 80px,
+);
+
+$tokens-typography: (
+  "display-hero": (
+    "font-size": 52px,
+    "font-weight": 800,
+    "line-height": 1.15
+  ),
+  "display-hero": (
+    "font-size": 44px,
+    "font-weight": 800,
+    "line-height": 1.5
+  ),
+  "display-hero": (
+    "font-size": 42px,
+    "font-weight": 800,
+    "line-height": 1.5
+  ),
+  "heading-xl": (
+    "font-size": 36px,
+    "font-weight": 800,
+    "line-height": 1.5
+  ),
+  "heading-xl": (
+    "font-size": 32px,
+    "font-weight": 700,
+    "line-height": 1.5
+  ),
+  "heading-sm": (
+    "font-size": 18px,
+    "font-weight": 700,
+    "line-height": 1.5
+  ),
+  "body-bold": (
+    "font-size": 17px,
+    "font-weight": 800,
+    "line-height": 1.5
+  ),
+  "body-base": (
+    "font-size": 17px,
+    "font-weight": 400,
+    "line-height": 1.65
+  ),
+  "body-base": (
+    "font-size": 16px,
+    "font-weight": 400,
+    "line-height": 1.6
+  ),
+  "body-bold": (
+    "font-size": 16px,
+    "font-weight": 700,
+    "line-height": 1.5
+  ),
+  "body-base": (
+    "font-size": 16px,
+    "font-weight": 400,
+    "line-height": 1.5
+  ),
+  "body-base": (
+    "font-size": 16px,
+    "font-weight": 400,
+    "line-height": 1.65
+  ),
+  "body-sm-bold": (
+    "font-size": 14px,
+    "font-weight": 600,
+    "line-height": 1.5
+  ),
+  "text-13": (
+    "font-size": 13px,
+    "font-weight": 500,
+    "line-height": 1.5
+  ),
+  "text-13": (
+    "font-size": 13px,
+    "font-weight": 400,
+    "line-height": 1.6
+  ),
+  "text-13": (
+    "font-size": 13px,
+    "font-weight": 400,
+    "line-height": 1.5
+  ),
+  "text-13": (
+    "font-size": 13px,
+    "font-weight": 600,
+    "line-height": 1.5
+  ),
+  "caption": (
+    "font-size": 12px,
+    "font-weight": 600,
+    "line-height": 1.5
+  ),
+  "caption": (
+    "font-size": 12px,
+    "font-weight": 500,
+    "line-height": 1.5
+  ),
+  "caption": (
+    "font-size": 12px,
+    "font-weight": 400,
+    "line-height": 1.5
+  ),
+  "caption": (
+    "font-size": 11px,
+    "font-weight": 700,
+    "line-height": 1.5
+  ),
+  "caption": (
+    "font-size": 10px,
+    "font-weight": 800,
+    "line-height": 1.5
+  ),
+);

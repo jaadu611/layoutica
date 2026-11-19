@@ -1,5 +1,12 @@
+// Description: 
+
 import { CanvasElement, Page, SavedComponent } from "./types";
 import { DesignTokens } from "./projectSaverLoader";
+import {
+  generateCssVariables,
+  generateScssMaps,
+  generateDtcgJson,
+} from "./tokenExtractor";
 import { twMerge } from "tailwind-merge";
 import { clsx, type ClassValue } from "clsx";
 
@@ -519,13 +526,15 @@ function getResponsiveVisibilityClasses(
 }
 
 function toPascalCase(str: string): string {
-  return (
-    str
-      .replace(/['"]/g, "")
-      .split(/[\s_\-./]+/)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join("") || "Component"
-  );
+  const clean = (str || "")
+    .replace(/[^a-zA-Z0-9\s_\-./]/g, " ")
+    .trim()
+    .split(/[\s_\-./]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join("");
+  if (!clean) return "Component";
+  return /^[0-9]/.test(clean) ? `Page${clean}` : clean;
 }
 
 function buildCompNameMap(saved: SavedComponent[]): Map<string, string> {
@@ -638,8 +647,25 @@ function elementToJSX(
   };
   const tag = el.htmlTag || tagMap[el.type] || "div";
 
-  if (el.type === "image")
-    return `${pad}<img src="${el.src || "/placeholder.jpg"}" alt="${el.alt || ""}"${clsAttr}${styAttr} />`;
+  if (el.type === "image") {
+    const imgSrc =
+      el.src ||
+      (el as any).url ||
+      (el.content &&
+      (el.content.startsWith("http") ||
+        el.content.startsWith("/") ||
+        el.content.startsWith("data:"))
+        ? el.content
+        : "") ||
+      (el.href &&
+      (el.href.startsWith("http") ||
+        el.href.startsWith("/") ||
+        el.href.startsWith("data:"))
+        ? el.href
+        : "") ||
+      "/placeholder.jpg";
+    return `${pad}<img src="${imgSrc}" alt="${el.alt || ""}"${clsAttr}${styAttr} />`;
+  }
 
   if (el.type === "link" || (el.type === "button" && el.href)) {
     const target =
@@ -1012,11 +1038,16 @@ export function generateAllPages(
   ].join("\n");
 
   let tokensCss = "";
-  if (designTokens && designTokens.colors && designTokens.colors.length > 0) {
-    const lines = designTokens.colors.map(
-      (c: any) => `  --color-${c.name.toLowerCase().replace(/[^a-z0-9]/gi, "-")}: ${c.value};`
-    ).join("\n");
-    tokensCss = `:root {\n${lines}\n}\n\n`;
+  if (
+    designTokens &&
+    ((designTokens.colors && designTokens.colors.length > 0) ||
+      (designTokens.spacing && designTokens.spacing.length > 0) ||
+      (designTokens.typography && designTokens.typography.length > 0))
+  ) {
+    tokensCss = generateCssVariables(designTokens);
+    files["src/styles/tokens.css"] = tokensCss;
+    files["src/styles/_tokens.scss"] = generateScssMaps(designTokens);
+    files["src/tokens.json"] = generateDtcgJson(designTokens);
   }
 
   files["src/app/globals.css"] = [
@@ -1026,6 +1057,7 @@ export function generateAllPages(
     `@tailwind utilities;`,
     ``,
     tokensCss,
+    ``,
     `html, body {`,
     `  margin: 0;`,
     `  padding: 0;`,

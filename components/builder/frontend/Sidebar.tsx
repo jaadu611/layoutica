@@ -1,3 +1,5 @@
+// Description: 
+
 "use client";
 
 import React, {
@@ -25,6 +27,7 @@ import {
   FileText,
   Trash2,
   Edit3,
+  Check,
   ChevronRight,
   Heading1,
   Heading2,
@@ -1468,66 +1471,110 @@ export default function Sidebar({ detachedOnly = false }: { detachedOnly?: boole
             <p className="text-[10px] uppercase tracking-wider text-white/40 mb-2 px-1 font-semibold">
               Site Pages
             </p>
-            {pages.map((page) => (
-              <div
-                key={page.id}
-                onClick={() => setActivePage(page.id)}
-                className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-md cursor-pointer transition-colors ${page.id === activePageId ? "bg-blue-500/15 text-blue-400" : "text-white/40 hover:bg-white/5 hover:text-white/80"}`}
-              >
-                <FileText
-                  size={12}
-                  className={
-                    page.id === activePageId
-                      ? "text-blue-400"
-                      : "opacity-40 group-hover:opacity-100"
-                  }
-                />
-                {editingPageId === page.id ? (
-                  <input
-                    autoFocus
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onBlur={() => {
-                      if (editingName.trim())
-                        renamePage(page.id, editingName.trim());
-                      setEditingPageId(null);
-                    }}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && setEditingPageId(null)
-                    }
-                    className="flex-1 bg-transparent text-[11px] outline-none text-white border-b border-blue-500"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <span className="flex-1 text-[11px] truncate font-medium">
-                    {page.name}
-                  </span>
-                )}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingPageId(page.id);
-                      setEditingName(page.name);
-                    }}
-                    className="p-1 hover:text-white cursor-pointer"
-                  >
-                    <Edit3 size={10} />
-                  </button>
-                  {pages.length > 1 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deletePage(page.id);
-                      }}
-                      className="p-1 hover:text-red-400 cursor-pointer"
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  )}
+            {pages.map((page) => {
+              const isCurrent = page.id === activePageId;
+              const isEditing = editingPageId === page.id;
+
+              const commitRename = () => {
+                const trimmed = editingName.trim();
+                if (trimmed) {
+                  renamePage(page.id, trimmed);
+                }
+                setEditingPageId(null);
+              };
+
+              return (
+                <div
+                  key={page.id}
+                  onClick={() => setActivePage(page.id)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingPageId(page.id);
+                    setEditingName(page.name);
+                  }}
+                  className={`group flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors w-full min-w-0 ${
+                    isCurrent
+                      ? "bg-blue-500/15 text-blue-400"
+                      : "text-white/50 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <FileText
+                      size={12}
+                      className={`shrink-0 ${
+                        isCurrent
+                          ? "text-blue-400"
+                          : "opacity-40 group-hover:opacity-100"
+                      }`}
+                    />
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            commitRename();
+                          } else if (e.key === "Escape") {
+                            setEditingPageId(null);
+                          }
+                        }}
+                        className="w-full min-w-0 bg-black/40 px-1.5 py-0.5 rounded text-[11px] outline-none text-white border border-blue-500 focus:border-blue-400"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="text-[11px] truncate font-medium min-w-0">
+                        {page.name}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className={`flex items-center gap-0.5 shrink-0 ${isEditing ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity`}>
+                    {isEditing ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          commitRename();
+                        }}
+                        title="Save name (Enter)"
+                        className="p-1 text-blue-400 hover:text-blue-300 cursor-pointer rounded hover:bg-white/5"
+                      >
+                        <Check size={11} />
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingPageId(page.id);
+                            setEditingName(page.name);
+                          }}
+                          title="Rename page"
+                          className="p-1 hover:text-white cursor-pointer text-white/40 hover:bg-white/5 rounded"
+                        >
+                          <Edit3 size={11} />
+                        </button>
+                        {pages.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePage(page.id);
+                            }}
+                            title="Delete page"
+                            className="p-1 hover:text-red-400 cursor-pointer text-white/40 hover:bg-white/5 rounded"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div className="mt-4 flex gap-1.5 px-1 items-center">
               <input
                 type="text"

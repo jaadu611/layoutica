@@ -1,8 +1,12 @@
+// Description: 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { getVsCodeApi } from "@/lib/builder/frontend/vscode";
 import { useBuilderStore } from "@/lib/builder/frontend/store";
+import { generateTailwindExtend } from "@/lib/builder/frontend/tokenExtractor";
+import { DesignTokens } from "@/lib/builder/frontend/types";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   Download,
@@ -73,7 +77,7 @@ const codeTheme: Record<string, React.CSSProperties> = {
   deleted: { color: "#f87171" },
 };
 
-function buildBoilerplate(): Record<string, string> {
+function buildBoilerplate(designTokens?: DesignTokens): Record<string, string> {
   const pkg = {
     name: PROJECT_NAME,
     version: "0.1.0",
@@ -121,12 +125,34 @@ function buildBoilerplate(): Record<string, string> {
     include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
     exclude: ["node_modules"],
   };
+
+  let tailwindThemeExtend = "theme: { extend: {} }";
+  if (
+    designTokens &&
+    ((designTokens.colors && designTokens.colors.length > 0) ||
+      (designTokens.spacing && designTokens.spacing.length > 0) ||
+      (designTokens.typography && designTokens.typography.length > 0))
+  ) {
+    tailwindThemeExtend = generateTailwindExtend(designTokens);
+  }
+
+  const tailwindConfig = [
+    `import type { Config } from "tailwindcss";`,
+    ``,
+    `export default {`,
+    `  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],`,
+    `  ${tailwindThemeExtend},`,
+    `  plugins: [],`,
+    `} satisfies Config;`,
+    ``,
+  ].join("\n");
+
   return {
     "package.json": JSON.stringify(pkg, null, 2),
     "tsconfig.json": JSON.stringify(tsconfig, null, 2),
     "next.config.ts": `import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {};\n\nexport default nextConfig;\n`,
     "postcss.config.js": `module.exports = {\n  plugins: { tailwindcss: {}, autoprefixer: {} },\n};\n`,
-    "tailwind.config.ts": `import type { Config } from "tailwindcss";\n\nexport default {\n  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],\n  theme: { extend: {} },\n  plugins: [],\n} satisfies Config;\n`,
+    "tailwind.config.ts": tailwindConfig,
     ".gitignore": `/node_modules\n/.next/\n/out/\n.DS_Store\n*.pem\n.env*.local\n.vercel\n*.tsbuildinfo\nnext-env.d.ts\n`,
   };
 }
@@ -150,7 +176,7 @@ function getLanguage(path: string): string {
   if (path.endsWith(".tsx") || path.endsWith(".ts")) return "tsx";
   if (path.endsWith(".js") || path.endsWith(".mjs")) return "javascript";
   if (path.endsWith(".json")) return "json";
-  if (path.endsWith(".css")) return "css";
+  if (path.endsWith(".css") || path.endsWith(".scss")) return "css";
   return "typescript";
 }
 
@@ -158,6 +184,7 @@ function getFileAccent(path: string): string {
   if (path.startsWith("src/components/")) return "#c084fc";
   if (path.startsWith("src/app/") && path.endsWith(".tsx")) return "#60a5fa";
   if (path.endsWith(".css")) return "#86efac";
+  if (path.endsWith(".scss")) return "#f472b6";
   if (path.endsWith(".json")) return "#67e8f9";
   return "rgba(255,255,255,0.4)";
 }
@@ -167,6 +194,7 @@ function getFileType(path: string): string {
   if (path.endsWith(".ts")) return "TS";
   if (path.endsWith(".json")) return "JSON";
   if (path.endsWith(".css")) return "CSS";
+  if (path.endsWith(".scss")) return "SCSS";
   if (path.endsWith(".js")) return "JS";
   if (path.endsWith(".gitignore")) return "GIT";
   return "TXT";
@@ -405,7 +433,11 @@ export default function CodeExportModal({ files, onClose }: Props) {
   const [downloading, setDownloading] = useState(false);
   const [dlError, setDlError] = useState<string | null>(null);
 
-  const BOILERPLATE = useMemo(() => buildBoilerplate(), []);
+  const designTokens = useBuilderStore((s) => s.designTokens);
+  const BOILERPLATE = useMemo(
+    () => buildBoilerplate(designTokens),
+    [designTokens],
+  );
   const allFiles = useMemo(
     () => ({ ...BOILERPLATE, ...files }),
     [BOILERPLATE, files],

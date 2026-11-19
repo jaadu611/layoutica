@@ -1,4 +1,13 @@
-import { DesignTokens } from "./projectSaverLoader";
+// Description: 
+
+import {
+  DesignTokens,
+  ColorToken,
+  TypographyToken,
+  SpacingToken,
+} from "./projectSaverLoader";
+
+export type { DesignTokens, ColorToken, TypographyToken, SpacingToken };
 
 export type ElementType =
   | "div"
@@ -164,6 +173,7 @@ export interface StyleProps {
   gradientAngle?: number;
   gradientStartColor?: string;
   gradientEndColor?: string;
+  boxSizing?: "border-box" | "content-box";
 }
 
 export interface CanvasElement {
@@ -297,6 +307,8 @@ export interface BuilderState {
   showGrid: boolean;
   showPadding: boolean;
   showMargin: boolean;
+  zoom: number;
+  setZoom: (zoom: number | ((prev: number) => number)) => void;
   exportMode: "live" | "export" | null;
   setExportMode: (mode: "live" | "export" | null) => void;
 
@@ -335,6 +347,7 @@ export interface BuilderState {
     components: SavedComponent[],
     designTokens: DesignTokens,
   ) => void;
+  setPages: (pages: Page[]) => void;
   setDesignTokens: (tokens: DesignTokens) => void;
   undo: () => void;
   redo: () => void;

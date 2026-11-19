@@ -1,3 +1,5 @@
+// Description: 
+
 "use client";
 
 import React, {
@@ -314,10 +316,12 @@ function ContextMenu({
 
     const currentColors = designTokens?.colors || [];
     const currentTypography = designTokens?.typography || [];
+    const currentSpacing = designTokens?.spacing || [];
 
     const updated = {
       colors: [...currentColors, newColorToken],
       typography: currentTypography,
+      spacing: currentSpacing,
     };
 
     setDesignTokens(updated);
@@ -565,6 +569,7 @@ interface RenderElementProps {
   pageId: string;
   zoom: number;
   onReorderDragStart: (e: React.DragEvent, id: string) => void;
+  onReorderDragEnd?: () => void;
   onReorderDragOver: (
     e: React.DragEvent,
     id: string,
@@ -596,6 +601,7 @@ function RenderElement({
   pageId,
   zoom,
   onReorderDragStart,
+  onReorderDragEnd,
   onReorderDragOver,
   onReorderDrop,
   draggingId,
@@ -609,6 +615,7 @@ function RenderElement({
   onCancelEdit,
 }: RenderElementProps) {
   const {
+    pages,
     selectedElementId,
     selectedElementIds,
     hoveredElementId,
@@ -957,18 +964,33 @@ function RenderElement({
     "data-bid": el.id,
     style: wrapperStyle,
     onClick: (e: React.MouseEvent) => {
-      if (el.type === "button" && el.href) {
-        e.preventDefault();
-      }
+      // Prevent browser link navigation/form submit from hijacking webview
+      e.preventDefault();
       e.stopPropagation();
       if (isEditing) return;
       if (activePageId !== pageId) {
         setActivePage(pageId);
       }
+      // If user Ctrl/Cmd+clicks a link/button with href, switch to that page in the builder
+      if ((e.metaKey || e.ctrlKey) && el.href) {
+        const targetSlug = el.href.startsWith("/") ? el.href : `/${el.href}`;
+        const targetPg = pages.find(
+          (p) => p.slug === targetSlug || (targetSlug === "/" && p.slug === "/"),
+        );
+        if (targetPg) {
+          setActivePage(targetPg.id);
+          return;
+        }
+      }
       if (e.shiftKey) toggleSelectElement(el.id);
       else selectElement(el.id);
     },
+    onAuxClick: (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    },
     onDoubleClick: (e: React.MouseEvent) => {
+      e.preventDefault();
       e.stopPropagation();
       if (isLocked) return;
       if (activePageId !== pageId) {
@@ -993,6 +1015,7 @@ function RenderElement({
       e.dataTransfer.setData("sourceElementId", el.id);
       onReorderDragStart(e, el.id);
     },
+    onDragEnd: onReorderDragEnd,
     onDragOver: (e: React.DragEvent) =>
       onReorderDragOver(
         e,
@@ -1025,22 +1048,42 @@ function RenderElement({
           />
         </>
       );
-    if (el.type === "image")
+    if (el.type === "image") {
+      const imgSrc =
+        el.src ||
+        (el as any).url ||
+        (el.content &&
+        (el.content.startsWith("http") ||
+          el.content.startsWith("/") ||
+          el.content.startsWith("data:"))
+          ? el.content
+          : undefined) ||
+        (el.href &&
+        (el.href.startsWith("http") ||
+          el.href.startsWith("/") ||
+          el.href.startsWith("data:"))
+          ? el.href
+          : undefined) ||
+        ((el.styles as any)?.backgroundImage
+          ? (el.styles as any).backgroundImage.match(/url\(['"]?(.*?)['"]?\)/)?.[1]
+          : undefined) ||
+        "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80";
+
       return (
         <img
-          src={
-            el.src || "https://placehold.co/800x400/f3f4f6/9ca3af?text=Image"
-          }
+          src={imgSrc}
           alt={el.alt || "image"}
           style={{
             width: "100%",
             height: "100%",
-            objectFit: "cover",
+            objectFit: el.styles.objectFit || "cover",
             display: "block",
             pointerEvents: "none",
+            borderRadius: el.styles.borderRadius,
           }}
         />
       );
+    }
     if (el.type === "video")
       return (
         <video
@@ -1411,6 +1454,7 @@ function RenderElement({
               zoom={zoom}
               onContextMenu={onContextMenu}
               onReorderDragStart={onReorderDragStart}
+              onReorderDragEnd={onReorderDragEnd}
               onReorderDragOver={onReorderDragOver}
               onReorderDrop={onReorderDrop}
               draggingId={draggingId}
@@ -1516,7 +1560,7 @@ function RenderElement({
       );
     }
     if (el.type === "icon") {
-      const name = el.iconName || "Sparkles";
+      const name = el.iconName || el.content || "Sparkles";
       const normalized = name
         .split(/[-_\s]+/)
         .map(
@@ -1687,6 +1731,7 @@ function RenderElement({
             zoom={zoom}
             onContextMenu={onContextMenu}
             onReorderDragStart={onReorderDragStart}
+            onReorderDragEnd={onReorderDragEnd}
             onReorderDragOver={onReorderDragOver}
             onReorderDrop={onReorderDrop}
             draggingId={draggingId}
@@ -1787,25 +1832,55 @@ function RenderElement({
           />
         </>
       )}
-      {isSelected && !isEditing && isTextType && (
-        <span
+      {isSelected && !isEditing && (
+        <div
           style={{
             position: "absolute",
-            top: -20,
+            top: -22,
             left: 0,
-            fontSize: 9,
-            color: "#0d99ff",
-            background: "rgba(13,153,255,0.1)",
-            padding: "2px 6px",
-            borderRadius: 3,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-            zIndex: 10,
-            display: "inline-block",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            zIndex: 50,
           }}
         >
-          {el.type}
-        </span>
+          {isTextType && (
+            <span
+              style={{
+                fontSize: 9,
+                color: "#0d99ff",
+                background: "rgba(13,153,255,0.15)",
+                border: "1px solid rgba(13,153,255,0.3)",
+                padding: "1px 5px",
+                borderRadius: 3,
+                pointerEvents: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {el.type}
+            </span>
+          )}
+          {el.href && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const targetSlug = el.href!.startsWith("/") ? el.href! : `/${el.href}`;
+                const targetPg = pages.find(
+                  (p) => p.slug === targetSlug || (targetSlug === "/" && p.slug === "/"),
+                );
+                if (targetPg) {
+                  setActivePage(targetPg.id);
+                }
+              }}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-600 hover:bg-violet-500 text-white text-[9px] font-semibold shadow-lg transition-colors cursor-pointer pointer-events-auto"
+              title={`Go to linked page: ${el.href}`}
+            >
+              <span>Go to {el.href}</span>
+              <LucideIcons.ExternalLink size={9} />
+            </button>
+          )}
+        </div>
       )}
       {renderContent()}
     </>,
@@ -2003,7 +2078,8 @@ export default function Canvas() {
 
   const page = getActivePage();
 
-  const [zoom, setZoom] = useState(1);
+  const zoom = useBuilderStore((s) => s.zoom);
+  const setZoom = useBuilderStore((s) => s.setZoom);
 
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [animateTransform, setAnimateTransform] = useState(false);
@@ -2158,6 +2234,12 @@ export default function Canvas() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  const handleDragEnd = useCallback(() => {
+    setIsDraggingOverVoid(false);
+    setDraggingId(null);
+    setDropTargetId(null);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const active = document.activeElement;
@@ -2184,19 +2266,20 @@ export default function Canvas() {
       setIsSpacePressed(false);
     };
     window.addEventListener("blur", handleBlur);
-    const handleDragEnd = () => {
-      setIsDraggingOverVoid(false);
-      setDraggingId(null);
-      setDropTargetId(null);
-    };
     window.addEventListener("dragend", handleDragEnd);
+    window.addEventListener("drop", handleDragEnd);
+    document.addEventListener("dragend", handleDragEnd);
+    document.addEventListener("drop", handleDragEnd);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("dragend", handleDragEnd);
+      window.removeEventListener("drop", handleDragEnd);
+      document.removeEventListener("dragend", handleDragEnd);
+      document.removeEventListener("drop", handleDragEnd);
     };
-  }, []);
+  }, [handleDragEnd]);
 
   const handleWheel = useCallback((e: WheelEvent) => {
     // Find if the target has scrollable ancestor
@@ -2511,6 +2594,7 @@ export default function Canvas() {
     onCommitEdit: handleCommitEdit,
     onCancelEdit: handleCancelEdit,
     onReorderDragStart: (_: React.DragEvent, id: string) => setDraggingId(id),
+    onReorderDragEnd: handleDragEnd,
     onReorderDragOver: (
       e: React.DragEvent,
       id: string,
@@ -2521,6 +2605,7 @@ export default function Canvas() {
     ) => {
       e.preventDefault();
       e.stopPropagation();
+      setIsDraggingOverVoid(false);
       setDropTargetId(id);
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const relX = (e.clientX - rect.left) / rect.width,
@@ -2556,6 +2641,7 @@ export default function Canvas() {
         reorderElement(sourceId, finalParentId, finalIndex);
       setDropTargetId(null);
       setDraggingId(null);
+      setIsDraggingOverVoid(false);
     },
   };
 
@@ -2583,7 +2669,11 @@ export default function Canvas() {
           setIsDraggingOverVoid(false);
         }
       }}
-      onDrop={() => setIsDraggingOverVoid(false)}
+      onDrop={() => {
+        setIsDraggingOverVoid(false);
+        setDraggingId(null);
+        setDropTargetId(null);
+      }}
       onContextMenu={(e) => {
         if (e.target === e.currentTarget) {
           e.preventDefault();
@@ -2667,9 +2757,6 @@ export default function Canvas() {
         </div>
       )}
 
-      {isDraggingOverVoid && (
-        <div className="absolute inset-0 bg-black/35 pointer-events-none z-10 transition-opacity duration-200" />
-      )}
 
       <div
         style={{
@@ -2788,11 +2875,15 @@ export default function Canvas() {
                     }
                   }}
                   onDragLeave={(e) => {
-                    e.stopPropagation();
-                    setIsDraggingOverVoid(true);
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      e.stopPropagation();
+                      setIsDraggingOverVoid(true);
+                    }
                   }}
                   onDrop={(e) => {
                     setIsDraggingOverVoid(false);
+                    setDraggingId(null);
+                    setDropTargetId(null);
                     const newType = e.dataTransfer.getData("elementType") as ElementType;
                     const compId = e.dataTransfer.getData("componentId");
                     const sourceId = e.dataTransfer.getData("sourceElementId");

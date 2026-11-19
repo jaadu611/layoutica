@@ -1,3 +1,5 @@
+// Description: 
+
 interface VsCodeApi {
   postMessage(message: any): void;
   setState(state: any): void;

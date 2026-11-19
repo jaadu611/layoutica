@@ -1,16 +1,33 @@
+// Description: 
+
 import { Page, SavedComponent } from "./types";
 import { getVsCodeApi } from "./vscode";
 
+export interface ColorToken {
+  id: string;
+  name: string;
+  value: string;
+}
+
+export interface TypographyToken {
+  id: string;
+  name: string;
+  fontSize: string;
+  fontWeight: string;
+  lineHeight: string;
+  letterSpacing?: string;
+}
+
+export interface SpacingToken {
+  id: string;
+  name: string;
+  value: string;
+}
+
 export interface DesignTokens {
-  colors: Array<{ id: string; name: string; value: string }>;
-  typography: Array<{
-    id: string;
-    name: string;
-    fontSize: string;
-    fontWeight: string;
-    lineHeight: string;
-    letterSpacing: string;
-  }>;
+  colors: ColorToken[];
+  typography: TypographyToken[];
+  spacing: SpacingToken[];
 }
 
 export interface LticaProject {
@@ -39,12 +56,14 @@ function migrateProject(project: LticaProject): LticaProject {
 
   // 1.1.0 → 1.2.0: designTokens didn't exist
   if (!project.data.designTokens) {
-    project.data.designTokens = { colors: [], typography: [] };
+    project.data.designTokens = { colors: [], typography: [], spacing: [] };
   } else {
     if (!Array.isArray(project.data.designTokens.colors))
       project.data.designTokens.colors = [];
     if (!Array.isArray(project.data.designTokens.typography))
       project.data.designTokens.typography = [];
+    if (!Array.isArray(project.data.designTokens.spacing))
+      project.data.designTokens.spacing = [];
   }
 
   if (!project.data.viewSettings) {

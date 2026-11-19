@@ -1,3 +1,5 @@
+// Description: 
+
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import {
@@ -11,6 +13,7 @@ import {
   UILayoutSnapshot,
 } from "./types";
 import { getVsCodeApi } from "./vscode";
+import { DEFAULT_MOCK_PAGES } from "./mockData";
 
 const generateId = () => Math.random().toString(36).substring(2, 11);
 const MAX_HISTORY = 50;
@@ -252,6 +255,8 @@ function tryHydrateFromStorage(set: (partial: Partial<BuilderState>) => void): b
       if (!raw) return false;
       const snapshot: UILayoutSnapshot = JSON.parse(raw);
       if (!snapshot?.data?.pages?.length) return false;
+      const totalElements = snapshot.data.pages.reduce((acc, p) => acc + (p.elements?.length || 0), 0);
+      if (totalElements === 0) return false;
       applySnapshot(set, snapshot);
       return true;
     } catch {
@@ -266,7 +271,13 @@ function applySnapshot(set: (partial: Partial<BuilderState>) => void, snapshot: 
   set({
     pages: snapshot.data.pages,
     components: snapshot.data.savedComponents ?? [],
-    designTokens: snapshot.data.designTokens ?? { colors: [], typography: [] },
+    designTokens: snapshot.data.designTokens
+      ? {
+          colors: snapshot.data.designTokens.colors ?? [],
+          typography: snapshot.data.designTokens.typography ?? [],
+          spacing: snapshot.data.designTokens.spacing ?? [],
+        }
+      : { colors: [], typography: [], spacing: [] },
     activePageId: snapshot.data.viewSettings?.activePageId ?? snapshot.data.pages[0]?.id ?? "",
     leftSidebarCollapsed: snapshot.data.viewSettings?.leftSidebarCollapsed ?? false,
     rightPanelCollapsed: snapshot.data.viewSettings?.rightPanelCollapsed ?? false,
@@ -283,23 +294,19 @@ export const useBuilderStore = create<BuilderState>()(
     // Attempt hydration on store creation (browser path)
     const hydrated = tryHydrateFromStorage(set);
 
-    // If not hydrated via localStorage, create a default Home page
-    const defaultPages: Page[] = [
-      {
-        id: "page-default-home",
-        name: "Home",
-        slug: "/",
-        role: "page",
-        elements: [],
-      },
-    ];
+    // If not hydrated via localStorage, load rich mock multi-page website
+    const defaultPages: Page[] = DEFAULT_MOCK_PAGES;
 
     return {
       pages: hydrated ? get().pages : defaultPages,
       activePageId: hydrated ? get().activePageId : "page-default-home",
       designTokens: hydrated
-        ? get().designTokens
-        : { colors: [], typography: [] },
+        ? {
+            colors: get().designTokens?.colors ?? [],
+            typography: get().designTokens?.typography ?? [],
+            spacing: get().designTokens?.spacing ?? [],
+          }
+        : { colors: [], typography: [], spacing: [] },
       selectedElementId: null,
       stylingState: "default" as SelectedState,
       selectedElementIds: [],
@@ -321,7 +328,13 @@ export const useBuilderStore = create<BuilderState>()(
       showGrid: true,
       showPadding: false,
       showMargin: false,
-      exportMode: hydrated ? get().exportMode : null,
+      zoom: 1,
+      setZoom: (zoomOrFn) => {
+        set((state) => ({
+          zoom: typeof zoomOrFn === "function" ? zoomOrFn(state.zoom) : zoomOrFn,
+        }));
+      },
+      exportMode: hydrated ? (get().exportMode ?? "live") : "live",
       setExportMode: (mode) => {
         set({ exportMode: mode });
         triggerAutoSave(get());
@@ -385,9 +398,18 @@ export const useBuilderStore = create<BuilderState>()(
       renamePage: (id, name) => {
         const { pages, activePageId, past } = get();
         set({
-          pages: pages.map((p) =>
-            p.id === id ? { ...p, name } : p,
-          ),
+          pages: pages.map((p) => {
+            if (p.id !== id) return p;
+            const isRoot = p.slug === "/" || p.id === "page-default-home" || p.name.toLowerCase() === "home";
+            let newSlug = p.slug;
+            if (!isRoot) {
+              const oldAutoSlug = "/" + p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+              if (p.slug === oldAutoSlug || p.slug === "" || !p.slug) {
+                newSlug = "/" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+              }
+            }
+            return { ...p, name, slug: newSlug };
+          }),
           past: pushHistory(past, pages, activePageId),
           future: [],
         });
@@ -651,6 +673,16 @@ export const useBuilderStore = create<BuilderState>()(
           selectedElementId: null,
           selectedElementIds: [],
           past: [],
+          future: [],
+        });
+        triggerAutoSave(get());
+      },
+
+      setPages: (pages) => {
+        const { pages: currentPages, past, activePageId } = get();
+        set({
+          pages,
+          past: pushHistory(past, currentPages, activePageId),
           future: [],
         });
         triggerAutoSave(get());

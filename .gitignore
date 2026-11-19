@@ -42,3 +42,4 @@ vite-env.d.ts
 
 # production build output
 /dist
+*.vsix

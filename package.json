@@ -1,6 +1,26 @@
 {
   "name": "layoutica",
+  "displayName": "Layoutica",
+  "description": "Visual Next.js & Tailwind CSS website builder extension for VS Code — craft responsive web layouts visually and export clean React code",
   "version": "0.1.0",
+  "publisher": "layoutica",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jaadu611/layoutica.git"
+  },
+  "keywords": [
+    "nextjs",
+    "tailwindcss",
+    "vscode-extension",
+    "website-builder",
+    "visual-editor",
+    "react",
+    "ui-builder",
+    "page-builder",
+    "drag-and-drop",
+    "typescript",
+    "web-design"
+  ],
   "private": true,
   "type": "module",
   "main": "./extension.js",
